@@ -16,6 +16,7 @@ from .common.i18n import t
 from .utils import print_log, print_error
 from .logger.wotHookEvents import wotHookEvents
 from .logger.sessionStorage import sessionStorage
+from .logger.extra.ExtraCollector import ExtraCollector
 from .common.serverLogger import setupLogger, send
 from .thirdParty.FixedBattleResultsCache import setup as setupFixedBattleResultsCache
 
@@ -113,6 +114,7 @@ def init_mod():
                        on_updated=update_end)
 
   sessionStorage.on_load_mod()
+  ExtraCollector.instance().setup()
   wotHookEvents.onConnected += on_connected
   wotHookEvents.onHangarLoaded += on_hangar_loaded_event
 

@@ -1,5 +1,6 @@
 import BigWorld
 from .events import get_current_date
+from .events import SessionMeta
 
 
 def windowed_array_next(arr, length, value):
@@ -54,10 +55,7 @@ class SessionStorage(object):
     if has_damage: self._total_shots_damaged += 1
     if has_direct_hit: self._total_shots_hit += 1
 
-  def setup_session_meta(self, sessionMeta):
-    """
-    @type sessionMeta: SessionMeta
-    """
+  def setup_session_meta(self, sessionMeta): # type: (SessionMeta) -> None
 
     lastBattle = self._last_battle_start_time
     sessionMeta.setupSessionMeta(battleResults=self._battle_results, battleStarts=self._battle_starts,

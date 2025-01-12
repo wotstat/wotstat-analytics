@@ -7,6 +7,7 @@ from gui.battle_control.battle_constants import FEEDBACK_EVENT_ID
 from .sessionStorage import sessionStorage
 from ..common.exceptionSending import with_exception_sending
 from ..load_mod import config
+from .extra.ExtraCollector import ExtraCollector
 
 from .arenaInfoProvider import ArenaInfoProvider
 
@@ -80,7 +81,9 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     allyTeamFragsCount=arenaInfoProvider.allyTeamFragsCount,
     enemyTeamFragsCount=arenaInfoProvider.enemyTeamFragsCount,
   )
-
+  
+  dynamicBattleEvent.setupExtra(ExtraCollector.instance().getExtraData())
+  
 
 def setup_session_meta(dynamicBattleEvent):
   # type: (SessionMeta) -> None

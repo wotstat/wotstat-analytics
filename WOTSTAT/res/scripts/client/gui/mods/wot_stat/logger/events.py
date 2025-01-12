@@ -80,7 +80,15 @@ class HangarEvent(Event):
     self.playerName = playerName
 
 
-class DynamicBattleEvent(BattleEvent):
+class BattleExtra():
+  
+  def __init__(self):
+    self.extra = {}
+    
+  def setupExtra(self, extra):
+    self.extra = extra
+
+class DynamicBattleEvent(BattleEvent, BattleExtra):
   def __init__(self, event_name, battleTime):
     BattleEvent.__init__(self, event_name, battleTime)
     self.arenaTag = None
