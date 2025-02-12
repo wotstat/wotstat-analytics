@@ -39,6 +39,8 @@ class BobProvider(IExtraProvider):
   def onBattleSessionStart(self):
     self.isInited = False
     
+    self.updateStats()
+    
     dynamicBob = self.sessionProvider.dynamic.bob # type: BattleBobController
     if not dynamicBob: return
     
@@ -75,10 +77,14 @@ class BobProvider(IExtraProvider):
     if (self.itemsCache.isSynced()):
       self.personalLevel = self.bobCtrl.personalLevel
 
+    self.updateStats()
+  
+  @with_exception_sending
+  def updateStats(self):
     self.stats = {}
     for t in self.bobCtrl.teamsRequester.getTeamsList():
       self.stats[str(t.team)] = { 'score': t.score, 'rank': t.rank }
-      
+  
   def setup(self):
     pass
   
@@ -96,6 +102,12 @@ class BobProvider(IExtraProvider):
           }
         }
       else:
+        if len(self.stats.items()) > 0:
+          return {
+            'bob': {
+              'stats': self.stats,
+            }
+          }
         return {}
     except Exception as e:
       return {}
