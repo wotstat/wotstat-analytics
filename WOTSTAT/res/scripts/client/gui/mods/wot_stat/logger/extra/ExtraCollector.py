@@ -14,8 +14,8 @@ class ExtraCollector(Singleton):
     self._collectors = [] # type: List[IExtraProvider]
     
     try:
-      from .BobProvider import BobProvider
-      self._collectors.append(BobProvider())
+      from .providers.ExampleProvider import ExampleProvider
+      self._collectors.append(ExampleProvider())
     except ImportError: pass
     
   def getExtraData(self):
