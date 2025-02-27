@@ -71,6 +71,7 @@ def _get_player_name():
   player = BigWorld.player()
 
   if not player: return 'unknown_player'
+  if not hasattr(player, 'name'): return 'unknown_name'
   if not player.name: return 'unknown_name'
   return player.name
 
