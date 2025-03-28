@@ -1,7 +1,7 @@
 import BattleReplay
 import BigWorld
 from account_helpers import gameplay_ctx
-from constants import ARENA_PERIOD, ARENA_PERIOD_NAMES
+from constants import ARENA_PERIOD, ARENA_BONUS_TYPE, ARENA_PERIOD_NAMES
 from ..eventLogger import eventLogger, battle_time
 from ..events import OnBattleStart
 from ..sessionStorage import sessionStorage
@@ -9,6 +9,8 @@ from ..utils import vector, setup_dynamic_battle_info, setup_session_meta
 from ..wotHookEvents import wotHookEvents
 from ...utils import print_debug
 
+
+AWAIT_BATTLE_PERIOD_BEFORE_START = [ARENA_BONUS_TYPE.COMP7]
 
 class OnBattleStartLogger:
   def __init__(self):
@@ -59,15 +61,25 @@ class OnBattleStartLogger:
     self.on_end_load_time = BigWorld.serverTime()
     self.shot_disp_multiplier_factor = shot_disp_multiplier_factor
 
-    if BigWorld.player().arena.period in [ARENA_PERIOD.PREBATTLE, ARENA_PERIOD.BATTLE]:
+    arena = BigWorld.player().arena
+    
+    if arena.period in [ARENA_PERIOD.PREBATTLE, ARENA_PERIOD.BATTLE] and arena.bonusType not in AWAIT_BATTLE_PERIOD_BEFORE_START:
+      self.init_battle_session()
+    elif arena.period == ARENA_PERIOD.BATTLE and arena.bonusType in AWAIT_BATTLE_PERIOD_BEFORE_START:
       self.init_battle_session()
 
   def on_arena_period_change(self, obj, period, periodEndTime, periodLength, periodAdditionalInfo, *a, **k):
-    if period is ARENA_PERIOD.PREBATTLE:
+    arena = BigWorld.player().arena
+    
+    if period is ARENA_PERIOD.PREBATTLE and arena.bonusType not in AWAIT_BATTLE_PERIOD_BEFORE_START:
       self.init_battle_session()
+      
+    if period is ARENA_PERIOD.BATTLE and arena.bonusType in AWAIT_BATTLE_PERIOD_BEFORE_START:
+      self.init_battle_session()
+
     if period is ARENA_PERIOD.BATTLE:
       eventLogger.start_battle_time = periodEndTime - periodLength
-
+      
   def init_battle_session(self):
     if not self.battle_loaded:
       return
