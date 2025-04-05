@@ -5,7 +5,7 @@ from items import vehicles as vehiclesWG
 from ..eventLogger import eventLogger
 from ..events import OnBattleResult
 from ..sessionStorage import sessionStorage
-from ..utils import short_tank_type, get_tank_role, setup_dynamic_battle_info, setup_session_meta
+from ..utils import short_tank_type, get_tank_role, setup_dynamic_battle_info, setup_session_meta, setup_server_info
 from ...common.exceptionSending import with_exception_sending
 from ...utils import print_log, print_debug
 
@@ -27,6 +27,7 @@ class OnBattleResultLogger:
     self.arenas_id_wait_battle_result.append(battleEventSession.arenaID)
     event = OnBattleResult()
     setup_dynamic_battle_info(event)
+    setup_server_info(event)
     self.precreated_battle_result_event[battleEventSession.arenaID] = event
 
   @with_exception_sending

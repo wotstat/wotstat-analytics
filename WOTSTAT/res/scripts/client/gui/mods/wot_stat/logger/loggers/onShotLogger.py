@@ -10,7 +10,7 @@ from ...thirdParty.dataProviderExtension import triggerOnShotBallistic
 from ..eventLogger import eventLogger, battle_time
 from ..events import OnShot
 from ..sessionStorage import sessionStorage
-from ..utils import vector, setup_dynamic_battle_info, setup_session_meta
+from ..utils import vector, setup_dynamic_battle_info, setup_session_meta, setup_server_info
 from ..wotHookEvents import wotHookEvents
 from ...logical.shotEventCollector import shotEventCollector
 from ...utils import print_debug, print_warn
@@ -216,6 +216,7 @@ class OnShotLogger:
     self.temp_shot.set_client_marker(vector(self.marker_client_pos), self.marker_client_disp)
     setup_dynamic_battle_info(self.temp_shot)
     setup_session_meta(self.temp_shot)
+    setup_server_info(self.temp_shot)
     shot = player.vehicleTypeDescriptor.shot
 
     player_vehicle = get_player_vehicle()

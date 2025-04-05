@@ -63,6 +63,15 @@ class SessionMeta(object):
     self.lastDmgPlace = list(lastDmgPlace)
     self.lastXpPlace = list(lastXpPlace)
 
+class ServerInfo(object):
+  serverName = ''
+  serverOnline = 0
+  regionOnline = 0
+  
+  def setupServerInfo(self, serverName, serverOnline, regionOnline):
+    self.serverName = serverName
+    self.serverOnline = serverOnline
+    self.regionOnline = regionOnline
 
 class BattleEvent(Event):
   def __init__(self, event_name, battleTime):
@@ -97,7 +106,6 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.accountDBID = None
     self.battleMode = None
     self.battleGameplay = None
-    self.serverName = None
     self.team = None
     self.tankTag = None
     self.tankType = None
@@ -112,16 +120,14 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.enemyTeamFragsCount = None
 
   def setupDynamicBattleInfo(self, arenaTag, playerName, playerClan, accountDBID, battleMode, battleGameplay,
-                             serverName, team, tankTag, tankType, tankRole, tankLevel,
-                             gunTag, allyTeamHealth, enemyTeamHealth, allyTeamMaxHealth, enemyTeamMaxHealth,
-                             allyTeamFragsCount, enemyTeamFragsCount):
+                             team, tankTag, tankType, tankRole, tankLevel,gunTag, allyTeamHealth, enemyTeamHealth,
+                             allyTeamMaxHealth, enemyTeamMaxHealth, allyTeamFragsCount, enemyTeamFragsCount):
     self.arenaTag = arenaTag
     self.playerName = playerName
     self.playerClan = playerClan
     self.accountDBID = accountDBID
     self.battleMode = battleMode
     self.battleGameplay = battleGameplay
-    self.serverName = serverName
     self.team = team
     self.tankTag = tankTag
     self.tankType = tankType
@@ -136,7 +142,7 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.enemyTeamFragsCount = enemyTeamFragsCount
 
 
-class OnBattleStart(DynamicBattleEvent, SessionMeta):
+class OnBattleStart(DynamicBattleEvent, SessionMeta, ServerInfo):
 
   def __init__(self, arenaId, spawnPoint, battleTime,
                battlePeriod, loadTime, preBattleWaitTime, inQueueWaitTime, gameplayMask):
@@ -151,7 +157,7 @@ class OnBattleStart(DynamicBattleEvent, SessionMeta):
     self.gameplayMask = gameplayMask
 
 
-class OnShot(DynamicBattleEvent, SessionMeta):
+class OnShot(DynamicBattleEvent, SessionMeta, ServerInfo):
   class HIT_REASON:
     TANK = 'tank'
     TERRAIN = 'terrain'
@@ -290,7 +296,7 @@ class OnShot(DynamicBattleEvent, SessionMeta):
     self.battleTime = time
 
 
-class OnBattleResult(DynamicBattleEvent, SessionMeta):
+class OnBattleResult(DynamicBattleEvent, SessionMeta, ServerInfo):
   result = None
 
   def __init__(self):
@@ -300,7 +306,7 @@ class OnBattleResult(DynamicBattleEvent, SessionMeta):
     self.result = result
 
 
-class OnLootboxOpen(HangarEvent, SessionMeta):
+class OnLootboxOpen(HangarEvent, SessionMeta, ServerInfo):
   def __init__(self, containerTag, openByTag, isOpenSuccess, openCount, openGroup, rerollCount):
     HangarEvent.__init__(self, Event.NAMES.ON_LOOTBOX_OPEN)
     self.containerTag = containerTag

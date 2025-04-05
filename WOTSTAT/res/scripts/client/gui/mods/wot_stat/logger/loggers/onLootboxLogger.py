@@ -26,7 +26,7 @@ from ...utils import print_log, print_warn
 from ...common.exceptionSending import with_exception_sending
 from ..events import OnLootboxOpen
 from ..eventLogger import eventLogger
-from ..utils import setup_hangar_event, setup_session_meta, get_private_attr
+from ..utils import setup_hangar_event, setup_session_meta, get_private_attr, setup_server_info
 from ...common.crossGameUtils import lootboxKeyPrefix, getLootboxKeyNameByID, getLootboxKeyNameByTokenID
 
 
@@ -259,6 +259,7 @@ class OnLootboxLogger:
       event.setup(json.dumps(preprocessData(bonus), ensure_ascii=False), parsed, claim)
       setup_session_meta(event)
       setup_hangar_event(event)
+      setup_server_info(event)
 
       eventLogger.emit_event(event)
 
