@@ -79,8 +79,8 @@ def update_mod_version(url, mod_name, current_version, on_start_update=None, on_
     latest_version = data['tag_name']
     print_log('detect latest version: ' + latest_version)
 
-    needDownloadLestaMigration = modExtension == '.mtmod' and num_game_version() == '1.35.0.0' and \
-      os.path.exists(os.path.join(os.path.abspath('./mods/'), '1.35.0.0', mod_name + '_' + latest_version + '.mtmod'))
+    needDownloadLestaMigration = modExtension == '.mtmod' and num_game_version() == '1.34.0.0' and \
+      not os.path.exists(os.path.join(os.path.abspath('./mods/'), '1.34.0.0', mod_name + '_' + latest_version + '.mtmod'))
       
     if current_version == latest_version and not needDownloadLestaMigration:
       if is_latest_version: is_latest_version()

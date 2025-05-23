@@ -14,7 +14,7 @@ class Config:
     'version': '0.0.0.0',
     'initBattleURL': 'https://wotstat.info/api/events/OnBattleStart',
     'eventURL': 'https://wotstat.info/api/events/send',
-    'updateURL': 'https://api.github.com/repos/WOT-STAT/WOTMOD/releases/latest',
+    'updateURL': 'https://api.github.com/repos/wotstat/wotstat-analytics/releases/latest',
     'statusURL': 'https://wotstat.info/api',
     'lokiURL': 'https://loki.wotstat.info/loki/api/v1/push',
     'hideServer': False,
