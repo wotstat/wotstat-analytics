@@ -20,33 +20,44 @@ jobs:
         run: echo "${{ secrets.CRYPTOPY }}" > WOTSTAT/res/scripts/client/gui/mods/wot_stat/common/crypto.py
         shell: bash
 
-      - name: mod name
+      - name: Compute artifact names
+        shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          MOD=mod.wotStat_$VERSION.wotmod
-          echo Version: $VERSION
-          echo Mod name: $MOD
+          BASE=mod.wotStat_$VERSION
+          WOTMOD=${BASE}.wotmod
+          MTMOD=${BASE}.mtmod
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "MOD=$MOD" >> $GITHUB_ENV
+          echo "WOTMOD=$WOTMOD" >> $GITHUB_ENV
+          echo "MTMOD=$MTMOD" >> $GITHUB_ENV
+
 
       - name: build
-        run: cd WOTSTAT && ./build.sh -v $VERSION && echo Mod name $MOD
+        run: cd WOTSTAT && ./build.sh -v $VERSION && echo Mod name $WOTMOD
         shell: bash
 
-      - name: Archive production artifacts
+      - name: Archive .wotmod artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.MOD }}
-          path: WOTSTAT/${{ env.MOD }}
+          name: ${{ env.WOTMOD }}
+          path: ${{ env.WOTMOD }}
+
+      - name: Archive .mtmod artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.MTMOD }}
+          path: ${{ env.MTMOD }}
 
       - name: upload linux artifact
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           draft: false
-          prerelease: false
-          files: WOTSTAT/${{ env.MOD }}
+          prerelease: true
           token: ${{ github.token }}
+          files: |
+            WOTSTAT/${{ env.WOTMOD }}
+            WOTSTAT/${{ env.MTMOD }}
           body: |
 
 

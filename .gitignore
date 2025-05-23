@@ -11,6 +11,7 @@ node_modules/
 
 crypto.py
 *.wotmod
+*.mtmod
 
 # wot source
 wot-src/

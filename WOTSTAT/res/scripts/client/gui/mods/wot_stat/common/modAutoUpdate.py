@@ -10,47 +10,42 @@ from asyncResponse import get_async
 from helpers import getShortClientVersion
 from ..utils import print_log, print_warn, print_error
 from .exceptionSending import with_exception_sending
+from .crossGameUtils import gamePublisher, PUBLISHER
 
+
+modExtension = '.mtmod' if gamePublisher() == PUBLISHER.LESTA else '.wotmod'
 
 def num_game_version():
   return getShortClientVersion().split('v.')[1].strip()
 
 
 @with_exception_sending
-def update_game_version(full_mod_name, mod_name):
-  gameVersion = num_game_version()
-  currentMod = os.path.join(os.path.abspath('./mods/'), gameVersion, full_mod_name)
-
-  def b(x, y):
+def update_game_version(modName, modVersion):
+  
+  def enumerateNextVersions(x, y):
     return '.'.join(
       [str(int(c) + 1 if i == y else 0) if i >= y else c for i, c in enumerate(x.split('.'))])
 
-  v = [b(gameVersion, i) for i in range(1, len(gameVersion.split('.')))]
+  def copyToVersion(targetVersion, sourcePath):
+    if not os.path.exists(sourcePath): return
+    
+    targetName = os.path.basename(sourcePath)
+    targetFolder = os.path.join(os.path.abspath('./mods/'), targetVersion)
+    targetPath = os.path.join(targetFolder, targetName)
+    
+    if not os.path.exists(targetFolder): os.mkdir(targetFolder)
+    if not os.path.exists(targetPath): shutil.copyfile(sourcePath, targetPath)
+    
+    oldModVersions = filter(lambda fileName: fileName.startswith(modName) and fileName.endswith(modExtension) and fileName != targetName, os.listdir(targetFolder))
+    for oldModName in oldModVersions:
+      os.remove(os.path.join(targetFolder, oldModName))
+    
 
-  absPath = os.path.abspath('./mods/')
-  for i in range(len(v)):
-    p = os.path.join(absPath, v[i])
-    if not os.path.exists(p):
-      os.mkdir(p)
-    filePath = os.path.join(p, full_mod_name)
-
-    old_mod_versions = filter(lambda x: x.startswith(mod_name) and x.endswith('.wotmod') and x != full_mod_name, os.listdir(p))
-    for old_mod in old_mod_versions:
-      os.remove(os.path.join(p, old_mod))
-
-    if not os.path.exists(filePath):
-      shutil.copyfile(currentMod, filePath)
-
-  # TODO: remove this later
-  # remove 2.0.0.0 mods if exists
-  v2Path = os.path.join(absPath, '2.0.0.0')
-  if os.path.exists(v2Path):
-    mods = filter(lambda x: x.startswith(mod_name) and x.endswith('.wotmod'), os.listdir(v2Path))
-    for mod in mods:
-      os.remove(os.path.join(v2Path, mod))
-    if not os.listdir(v2Path):
-      os.rmdir(v2Path)
-      print_log('Remove empty v2.0.0.0 folder')
+  gameVersion = num_game_version()
+  nextGameVersions = [enumerateNextVersions(gameVersion, i) for i in range(1, len(gameVersion.split('.')))]
+    
+  for version in nextGameVersions:
+    copyToVersion(version, os.path.join(os.path.abspath('./mods/'), gameVersion, modName + '_' + modVersion + modExtension))  
 
 
 GH_headers = {
@@ -68,7 +63,7 @@ def update_mod_version(url, mod_name, current_version, on_start_update=None, on_
 
     gameVersion = num_game_version()
     newMod = os.path.join(os.path.abspath(
-      './mods/'), gameVersion, mod_name + '_' + latest_version + '.wotmod')
+      './mods/'), gameVersion, mod_name + '_' + latest_version + modExtension)
     if not os.path.exists(newMod):
       with open(newMod, "wb") as f:
         f.write(res)
@@ -84,7 +79,10 @@ def update_mod_version(url, mod_name, current_version, on_start_update=None, on_
     latest_version = data['tag_name']
     print_log('detect latest version: ' + latest_version)
 
-    if current_version == latest_version:
+    needDownloadLestaMigration = modExtension == '.mtmod' and num_game_version() == '1.35.0.0' and \
+      os.path.exists(os.path.join(os.path.abspath('./mods/'), '1.35.0.0', mod_name + '_' + latest_version + '.mtmod'))
+      
+    if current_version == latest_version and not needDownloadLestaMigration:
       if is_latest_version: is_latest_version()
       return
 
@@ -115,7 +113,7 @@ def update_mod_version(url, mod_name, current_version, on_start_update=None, on_
         print_error('can not parse canary upgrade')
 
     assets = data['assets']
-    asset = filter(lambda x: ('name' in x) and (x['name'] == 'mod.wotStat_' + latest_version + '.wotmod'), assets)
+    asset = filter(lambda x: ('name' in x) and (x['name'] == 'mod.wotStat_' + latest_version + modExtension), assets)
     if not len(asset) > 0: return
 
     firstAsset = asset[0]

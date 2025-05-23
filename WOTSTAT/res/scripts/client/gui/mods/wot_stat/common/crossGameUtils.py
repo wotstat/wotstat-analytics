@@ -48,3 +48,11 @@ def lootboxKeyPrefix():
     return LOOTBOX_KEY_PREFIX
   except ImportError:
     return 'lb_key:'
+  
+class PUBLISHER():
+  LESTA = 'LESTA'
+  WARGAMING = 'WARGAMING'
+
+def gamePublisher():
+  from realm import CURRENT_REALM
+  return PUBLISHER.LESTA if CURRENT_REALM == 'RU' else PUBLISHER.WARGAMING

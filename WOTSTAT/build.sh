@@ -1,5 +1,6 @@
 #!/bin/bash
 
+MOD_NAME="mod.wotStat"
 d=false
 
 while getopts "v:d" flag
@@ -35,7 +36,7 @@ meta="${meta/\{\{VERSION\}\}/$v}"
 cd ./build
 echo "$meta" > ./meta.xml
 
-folder="mod.wotStat_$v.wotmod"
+folder=$MOD_NAME"_$v.wotmod"
 
 rm -rf $folder
 
@@ -46,3 +47,4 @@ zip -vr -0 -X $folder res -i "*.png"
 cd ../
 cp ./build/$folder $folder
 rm -rf ./build
+cp $folder $MOD_NAME"_$v.mtmod"

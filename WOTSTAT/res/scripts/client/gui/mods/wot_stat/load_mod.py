@@ -26,7 +26,7 @@ api_server_time = None
 
 
 def mod_name_version(version):
-  return MOD_NAME_PREFIX + '_' + version + '.wotmod'
+  return MOD_NAME_PREFIX + '_' + version
 
 
 def mod_name():
@@ -105,7 +105,7 @@ def init_mod():
   get_async(config.get('statusURL'), callback=on_status_check, error_callback=on_status_check_fail)
 
   if not config.get('disableCopyToFuture'):
-    update_game_version(mod_name(), MOD_NAME_PREFIX)
+    update_game_version(MOD_NAME_PREFIX, config.get('version'))
   
   if not config.get('disableAutoUpdate'):
     update_mod_version(config.get('updateURL'), MOD_NAME_PREFIX,
