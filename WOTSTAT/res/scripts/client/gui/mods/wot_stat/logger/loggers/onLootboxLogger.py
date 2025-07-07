@@ -22,7 +22,7 @@ from skeletons.gui.goodies import IGoodiesCache
 from items import vehicles as vehicles_core, ITEM_TYPES, tankmen
 
 from ..wotHookEvents import wotHookEvents
-from ...utils import print_log, print_warn
+from ...utils import print_log, print_warn, print_debug
 from ...common.exceptionSending import with_exception_sending
 from ..events import OnLootboxOpen
 from ..eventLogger import eventLogger
@@ -149,16 +149,24 @@ class OnLootboxLogger:
   def __init__(self):
     wotHookEvents.LootBoxOpenProcessorOpenRequest += self.on_request
     wotHookEvents.LootBoxOpenProcessorOpenResponse += self.on_response
+    
     wotHookEvents.LootBoxRerollProcessorOpenRequest += self.on_reroll_request
     wotHookEvents.LootBoxRerollProcessorOpenResponse += self.on_reroll_response
     
+    wotHookEvents.LootBoxSystemOpenProcessorRequest += self.on_system_request
+    wotHookEvents.LootBoxSystemOpenProcessorResponse += self.on_system_response
+    
   def on_reroll_request(self, obj, *a, **k):
+    print_debug("Lootbox.on_reroll_request")
+    
     self.lastOpenKeyId = 0
     self.lastOpenId = obj._LootBoxReRollProcessor__lootBox.getID()
     self.lastOpenCount = 1
     self.lastRerollClaimed = False
   
   def on_request(self, obj, *a, **k):
+    print_debug("Lootbox.on_request")
+    
     self.lastOpenKeyId = 0
     if self.lastRerollClaimed: self.resetReroll()
     
@@ -169,6 +177,8 @@ class OnLootboxLogger:
     self.lastOpenCount = obj._LootBoxOpenProcessor__count
 
   def on_reroll_response(self, obj, code, ctx=None):
+    print_debug("Lootbox.on_reroll_response")
+    
     if ctx is None:
       print_warn('OnLootboxLogger.on_reroll_response: ctx is None')
       return
@@ -205,7 +215,15 @@ class OnLootboxLogger:
     
     return False
 
+  def on_system_request(self, obj, *a, **k):
+    print_debug("Lootbox.on_system_request")
+
+  def on_system_response(self, obj, code, ctx=None):
+    print_debug("Lootbox.on_system_response")
+
   def on_response(self, obj, code, ctx=None):
+    print_debug("Lootbox.on_response")
+    
     if ctx is None:
       print_warn('OnLootboxLogger.on_response: ctx is None')
       return
