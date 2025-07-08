@@ -13,7 +13,7 @@ from ..sessionStorage import sessionStorage
 from ..utils import vector, setup_dynamic_battle_info, setup_session_meta, setup_server_info
 from ..wotHookEvents import wotHookEvents
 from ...logical.shotEventCollector import shotEventCollector
-from ...utils import print_debug, print_warn
+from ...utils import print_debug, print_warn, print_error
 
 
 def own_effect_index(player):
@@ -271,7 +271,16 @@ class OnShotLogger:
         player.getOwnVehicleSpeeds()[1] * 180 / math.pi
       ))
 
-  def show_tracer(self, obj, attackerID, shotID, isRicochet, effectsIndex, refStartPoint, refVelocity, gravity, *a, **k):
+  def show_tracer(self, obj, *a, **k):
+    if len(a) == 12:
+      attackerID, shotID, isRicochet, effectsIndex, prefabEffIndex, shellTypeIdx, shellCaliber, refStartPoint, refVelocity, gravity, maxShotDist, gunIndex = a
+    elif len(a) == 9:
+      attackerID, shotID, isRicochet, effectsIndex, refStartPoint, refVelocity, gravity, maxShotDist, gunIndex = a
+      prefabEffIndex = shellTypeIdx = shellCaliber = None
+    else:
+      print_error('show_tracer: wrong args count. Got {} expected 12 or 9. Args: {}'.format(len(a), a))
+      return
+    
     player = BigWorld.player()
     if isRicochet or player is None or attackerID != player.playerVehicleID or effectsIndex not in own_effect_index(player):
       return
@@ -304,7 +313,17 @@ class OnShotLogger:
       if attackReasonID == ATTACK_REASON_INDICES[ATTACK_REASON.FIRE]:
         shotEventCollector.fire_damage(obj.id, newHealth, oldHealth)
 
-  def explode_projectile(self, obj, shotID, effectsIndex, effectMaterialIndex, endPoint, *a, **k):
+  def explode_projectile(self, obj, *a, **k):
+    
+    if len(a) == 10:
+      shotID, effectsIndex, prefabEffIndex, effectMaterialIndex, shellTypeIdx, shellCaliber, endPoint, velocityDir, speed, damagedDestructibles = a
+    elif len(a) == 6:
+      shotID, effectsIndex, effectMaterialIndex, endPoint, velocityDir, damagedDestructibles = a
+      prefabEffIndex = shellTypeIdx = shellCaliber = None
+    else:
+      print_error('explode_projectile: wrong args count. Got {} expected 10 or 6. Args: {}'.format(len(a), a))
+      return
+    
     if effectsIndex not in own_effect_index(BigWorld.player()):
       return
 
@@ -321,11 +340,27 @@ class OnShotLogger:
     if not obj.isStarted:
       return
 
-    decodedPoints = DamageFromShotDecoder.decodeHitPoints(points, obj.appearance.collisions)
-    if not decodedPoints:
+    if hasattr(DamageFromShotDecoder, 'decodeHitPoints'):
+      decodedPoints = DamageFromShotDecoder.decodeHitPoints(points, obj.appearance.collisions)
+    elif hasattr(DamageFromShotDecoder, 'parseHitPoints'):
+      decodedPoints = DamageFromShotDecoder.parseHitPoints(points, obj.appearance.collisions)
+    else:
+      print_error('DamageFromShotDecoder does not have decodeHitPoints or parseHitPoints method')
+      return
+    
+    if not decodedPoints or len(decodedPoints) == 0 or len(points) == 0:
+      return
+    
+    firstPoint = points[0]
+    if type(firstPoint) is long:
+      segment = firstPoint
+    elif firstPoint is not None and hasattr(firstPoint, 'segment'):
+      segment = firstPoint['segment']
+    else:
+      print_error('show_damage_from_shot: firstPoint havent segment. Type {}. Point: {}'.format(type(firstPoint), firstPoint))
       return
 
-    shotEventCollector.tank_hit(obj.id, decode_hit_point(obj, decodedPoints), get_full_descr(obj) + (points[0],))
+    shotEventCollector.tank_hit(obj.id, decode_hit_point(obj, decodedPoints), get_full_descr(obj) + (segment,))
 
   def kill_projectile(self, obj, shotID, position, impactVelDir, deathType, *a, **k):
     shot = abs(shotID)
