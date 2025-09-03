@@ -15,6 +15,8 @@ from ..wotHookEvents import wotHookEvents
 from ...logical.shotEventCollector import shotEventCollector
 from ...utils import print_debug, print_warn, print_error
 
+from VehicleGunRotator import VehicleGunRotator
+IS_HET_GUN_MARKER_EXIST = hasattr(VehicleGunRotator, '_VehicleGunRotator__getGunMarkerPosition')
 
 def own_effect_index(player):
   return map(lambda t: t.shell.effectsIndex, player.vehicleTypeDescriptor.gun.shots)
@@ -177,15 +179,27 @@ class OnShotLogger:
 
   def update_gun_marker_server(self, obj, vehicleID, shotPos, shotVec, dispersionAngle, *a, **k):
     if not obj.gunRotator: return
-    self.marker_server_pos = obj.gunRotator._VehicleGunRotator__getGunMarkerPosition(
-      shotPos, shotVec, [dispersionAngle, dispersionAngle, dispersionAngle, dispersionAngle])[0]
+
+    if IS_HET_GUN_MARKER_EXIST:
+      self.marker_server_pos = obj.gunRotator._VehicleGunRotator__getGunMarkerPosition(
+        shotPos, shotVec, [dispersionAngle, dispersionAngle, dispersionAngle, dispersionAngle])[0]
+    else:
+      self.marker_server_pos = obj.gunRotator._VehicleGunRotator__getGunMarkerInfo(
+        shotPos, shotVec, [dispersionAngle, dispersionAngle, dispersionAngle, dispersionAngle],
+        obj.gunRotator._VehicleGunRotator__gunIndex).position
 
     self.marker_server_disp = dispersionAngle
 
   def update_gun_marker_client(self, obj, *a, **k):
     shotPos, shotVec = obj.getCurShotPosition()
-    self.marker_client_pos = obj._VehicleGunRotator__getGunMarkerPosition(
-      shotPos, shotVec, obj._VehicleGunRotator__dispersionAngles)[0]
+
+    if IS_HET_GUN_MARKER_EXIST:
+      self.marker_client_pos = obj._VehicleGunRotator__getGunMarkerPosition(
+        shotPos, shotVec, obj._VehicleGunRotator__dispersionAngles)[0]
+    else:
+      self.marker_client_pos = obj._VehicleGunRotator__getGunMarkerInfo(
+        shotPos, shotVec, obj._VehicleGunRotator__dispersionAngles, obj._VehicleGunRotator__gunIndex).position
+
 
     self.marker_client_disp = obj._VehicleGunRotator__dispersionAngles[0]
 
@@ -272,8 +286,8 @@ class OnShotLogger:
       ))
 
   def show_tracer(self, obj, *a, **k):
-    if len(a) == 12:
-      attackerID, shotID, isRicochet, effectsIndex, prefabEffIndex, shellTypeIdx, shellCaliber, refStartPoint, refVelocity, gravity, maxShotDist, gunIndex = a
+    if len(a) == 13:
+      attackerID, shotID, isRicochet, effectsIndex, prefabEffIndex, shellTypeIdx, shellCaliber, refStartPoint, refVelocity, gravity, maxShotDist, gunIndex, gunInstallationIndex = a
     elif len(a) == 9:
       attackerID, shotID, isRicochet, effectsIndex, refStartPoint, refVelocity, gravity, maxShotDist, gunIndex = a
       prefabEffIndex = shellTypeIdx = shellCaliber = None
@@ -284,7 +298,10 @@ class OnShotLogger:
     player = BigWorld.player()
     if isRicochet or player is None or attackerID != player.playerVehicleID or effectsIndex not in own_effect_index(player):
       return
-
+     
+    shooter = BigWorld.entity(attackerID)
+    if shooter is None or not shooter.isStarted: return
+    
     shot = abs(shotID)
     shotEventCollector.show_tracer(shot, refStartPoint, refVelocity, gravity, self.shot_click_time)
     self.active_tracers.append(shot)
@@ -297,9 +314,14 @@ class OnShotLogger:
 
   def show_shot_results(self, obj, results):
     for r in results:
-      mask = ((1 << 32) - 1)
-      vehicleID = r & mask
-      flags = r >> 32 & mask
+      
+      if isinstance(r, long):
+        mask = ((1 << 32) - 1)
+        vehicleID = r & mask
+        flags = r >> 32 & mask
+      else:
+        vehicleID = r.vehicleID
+        flags = r.hitFlags
 
       vehicle = BigWorld.entities.get(vehicleID)
       health = vehicle.health if vehicle else None

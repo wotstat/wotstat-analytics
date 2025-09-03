@@ -3,7 +3,6 @@ from Avatar import PlayerAvatar
 from ProjectileMover import ProjectileMover
 from Vehicle import Vehicle
 from VehicleGunRotator import VehicleGunRotator
-from gui.Scaleform.daapi.view.lobby.battle_queue import BattleQueue
 from helpers import dependency
 from skeletons.connection_mgr import IConnectionManager
 from skeletons.gui.shared.utils import IHangarSpace
@@ -96,9 +95,14 @@ def vehicleGunRotator_start(self, *a, **k):
   wotHookEvents.VehicleGunRotator_start(self, *a, **k)
 
 
-@g_overrideLib.registerEvent(BattleQueue, '_populate')
-def queuePopulate(self, *a, **k):
-  wotHookEvents.BattleQueue_populate(self, *a, **k)
+try:
+  from gui.Scaleform.daapi.view.lobby.battle_queue import BattleQueue
+  @g_overrideLib.registerEvent(BattleQueue, '_populate')
+  def queuePopulate(self, *a, **k): wotHookEvents.BattleQueue_populate(self, *a, **k)
+except:
+  from gui.Scaleform.daapi.view.lobby.battle_queue.battle_queue import BattleQueue
+  @g_overrideLib.registerEvent(BattleQueue, '_populate')
+  def queuePopulate(self, *a, **k): wotHookEvents.BattleQueue_populate(self, *a, **k)
 
 
 @g_overrideLib.registerEvent(PlayerAvatar, 'onEnterWorld')
