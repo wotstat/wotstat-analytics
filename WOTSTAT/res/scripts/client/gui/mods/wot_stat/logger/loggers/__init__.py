@@ -5,3 +5,4 @@ from onShotLogger import onShotLogger
 # from ribbonsLogger import onRibbonsLogger
 # from onShotReceiveLogger import onShotReceiveLogger
 from onLootboxLogger import onLootboxLogger
+from moeLogger import moeLogger

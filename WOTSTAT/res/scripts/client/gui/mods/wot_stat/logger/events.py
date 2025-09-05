@@ -16,9 +16,10 @@ class Event:
     ON_SHOT = 'OnShot'
     ON_BATTLE_RESULT = 'OnBattleResult'
     ON_LOOTBOX_OPEN = 'OnLootboxOpen'
+    ON_MOE_INFO = 'OnMoeInfo'
 
-    HANGAR_EVENTS = [ON_LOOTBOX_OPEN]
-    
+    HANGAR_EVENTS = [ON_LOOTBOX_OPEN, ON_MOE_INFO]
+
 
   def __init__(self, event_name):
     self.eventName = event_name
@@ -321,6 +322,12 @@ class OnLootboxOpen(HangarEvent, SessionMeta, ServerInfo):
     self.parsed = parsed
     self.claimed = claimed
 
+class OnMoeInfo(HangarEvent):
+  def __init__(self, tankTag, battleCount, moeDistribution):
+    HangarEvent.__init__(self, Event.NAMES.ON_MOE_INFO)
+    self.tankTag = tankTag
+    self.battleCount = battleCount
+    self.moeDistribution = moeDistribution
     
 def get_current_date():
   return datetime.datetime.now().isoformat()  # TODO: Лучше брать серверное время танков, если такое есть

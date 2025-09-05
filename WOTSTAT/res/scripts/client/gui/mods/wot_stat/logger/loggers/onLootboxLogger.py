@@ -22,7 +22,7 @@ from skeletons.gui.goodies import IGoodiesCache
 from items import vehicles as vehicles_core, ITEM_TYPES, tankmen
 
 from ..wotHookEvents import wotHookEvents
-from ...utils import print_log, print_warn, print_debug
+from ...utils import print_error, print_log, print_warn, print_debug
 from ...common.exceptionSending import with_exception_sending
 from ..events import OnLootboxOpen
 from ..eventLogger import eventLogger
@@ -385,11 +385,18 @@ class OnLootboxLogger:
       elif tokenID == 'ny25_mandarin':
         parsed['extraTokens'].append(('ny25_mandarin', count))
 
-  # TODO: Entitlements
   @with_exception_sending
   def parseEntitlements(self, parsed, bonus):
-    # entitlementsList = [ (eID, eData.get('count', 0)) for eID, eData in bonus.get('entitlements', {}).iteritems() ]
-    pass
+    # TODO: Remove try-except after testing
+    try:
+      parsed['entitlements'] = []
+      entitlements = bonus.get('entitlements', {})
+      for eId, data in entitlements.iteritems():
+        count = data.get('count', 0)
+        parsed['entitlements'].append((eId, count))
+    except Exception as e:
+      print_error('OnLootboxLogger.parseEntitlements exception: {}'.format(e))
+      parsed['entitlements'] = []
 
   @with_exception_sending
   def parseCustomizations(self, parsed, bonus):
