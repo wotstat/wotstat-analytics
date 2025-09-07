@@ -1,5 +1,3 @@
-
-from operator import le
 import BigWorld
 import random
 
@@ -13,6 +11,9 @@ from ..events import OnMoeInfo
 from ...common.crossGameUtils import gamePublisher, PUBLISHER
 from ..utils import setup_hangar_event
 from ...common.exceptionSending import with_exception_sending
+
+# Full report can be requested from console:
+# from gui.mods.wot_stat.logger.loggers.moeLogger import moeLogger; moeLogger.fullReport()
 
 class MoeLogger:
   
@@ -62,4 +63,46 @@ class MoeLogger:
     setup_hangar_event(event)
     eventLogger.emit_event(event)
 
+  @with_exception_sending
+  def fullReport(self):
+    from AccountCommands import CMD_GET_VEHICLE_DAMAGE_DISTRIBUTION
+    
+    print("=======Full Moe Report=======")
+    
+    self.vehicles = [v for v in self.itemsCache.items.getVehicles().values() if v.level >= 5]
+    print("Total vehicles:", len(self.vehicles))
+    
+    self.currentFullReportIndex = 0
+  
+    def nextRequest():
+      if self.currentFullReportIndex >= len(self.vehicles) or self.currentFullReportIndex < 0:
+        print("=======End of Report=======")
+        return
+      
+      vehicle = self.vehicles[self.currentFullReportIndex]  
+      BigWorld.player()._doCmdInt(CMD_GET_VEHICLE_DAMAGE_DISTRIBUTION, vehicle.intCD, responseCallback)
+    
+    def responseCallback(requestID, responseID, errorStr, ext=None):
+      self.currentFullReportIndex += 1
+      
+      if not ext: 
+        print("No data for requestID", requestID)
+        self.currentFullReportIndex = -1
+        return
+      
+      vehicleName = self.vehicles[self.currentFullReportIndex - 1].name
+      if not vehicleName: return
+      
+      battles = ext.get('battleCount', 0)
+      damageBetterThanNPercent = ext.get('damageBetterThanNPercent', [])
+
+      print("[%d/%d]: %s - battles: %d, damageBetterThanNPercent: %s" % (self.currentFullReportIndex, len(self.vehicles), vehicleName, battles, damageBetterThanNPercent))
+
+      event = OnMoeInfo(vehicleName, battles, damageBetterThanNPercent)
+      setup_hangar_event(event)
+      eventLogger.emit_event(event)
+      BigWorld.callback(1, nextRequest)
+
+    nextRequest()
+    
 moeLogger = MoeLogger()
