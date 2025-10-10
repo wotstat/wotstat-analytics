@@ -11,6 +11,8 @@ from .i18n import t
 
 OPEN_PERSONAL_WOTSTAT_EVENT = 'OPEN_PERSONAL_WOTSTAT_EVENT_'
 
+openWebBrowser = BigWorld.wg_openWebBrowser if hasattr(BigWorld, 'wg_openWebBrowser') else BigWorld.openWebBrowser 
+
 
 class UrlDialogButtons(object):
   def getLabels(self):
@@ -23,7 +25,7 @@ class UrlDialogButtons(object):
 @with_exception_sending
 def show_url_dialog(title=None, message=None, url=None):
   meta = SimpleDialogMeta(title=title, message=message, buttons=UrlDialogButtons())
-  showDialog(meta, lambda proceed: BigWorld.wg_openWebBrowser(url) if proceed else None)
+  showDialog(meta, lambda proceed: openWebBrowser(url) if proceed else None)
 
 
 def show_open_web_browser(url):

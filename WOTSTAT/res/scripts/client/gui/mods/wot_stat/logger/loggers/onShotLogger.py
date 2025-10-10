@@ -1,6 +1,7 @@
 import math
 
 import BigWorld
+import Math
 from Avatar import getVehicleShootingPositions
 from Math import Matrix
 from Vehicle import Vehicle
@@ -288,9 +289,20 @@ class OnShotLogger:
   def show_tracer(self, obj, *a, **k):
     if len(a) == 13:
       attackerID, shotID, isRicochet, effectsIndex, prefabEffIndex, shellTypeIdx, shellCaliber, refStartPoint, refVelocity, gravity, maxShotDist, gunIndex, gunInstallationIndex = a
+      
+      acceleration = Math.Vector3(0.0, -gravity, 0.0)
     elif len(a) == 9:
-      attackerID, shotID, isRicochet, effectsIndex, refStartPoint, refVelocity, gravity, maxShotDist, gunIndex = a
+      attackerID, shotID, isRicochet, effectsIndex, refStartPoint, refVelocity, gravityOrAcceleration, maxShotDist, gunIndex = a
       prefabEffIndex = shellTypeIdx = shellCaliber = None
+      
+      # TODO: remove it after 1.28
+      if isinstance(gravityOrAcceleration, (int, float)):
+        gravity = gravityOrAcceleration
+        acceleration = Math.Vector3(0.0, -gravity, 0.0)
+      elif isinstance(gravityOrAcceleration, Math.Vector3):
+        acceleration = gravityOrAcceleration
+        gravity = -acceleration.y
+        
     else:
       print_error('show_tracer: wrong args count. Got {} expected 12 or 9. Args: {}'.format(len(a), a))
       return
@@ -303,11 +315,11 @@ class OnShotLogger:
     if shooter is None or not shooter.isStarted: return
     
     shot = abs(shotID)
-    shotEventCollector.show_tracer(shot, refStartPoint, refVelocity, gravity, self.shot_click_time)
+    shotEventCollector.show_tracer(shot, refStartPoint, refVelocity, self.shot_click_time)
     self.active_tracers.append(shot)
     self.history_tracers.append(shot)
 
-    self.temp_shot.set_tracer(shot, vector(refStartPoint), vector(refVelocity), gravity)
+    self.temp_shot.set_tracer(shot, vector(refStartPoint), vector(refVelocity), vector(acceleration))
     triggerOnShotBallistic(self.temp_shot.get_dict())
     self.shots[shot] = self.temp_shot
     self.temp_shot = OnShot()

@@ -303,7 +303,7 @@ class ShotEventCollector:
       self.session_events.append(event)
       self.process_events()
 
-  def show_tracer(self, shotID, start, velocity, gravity, shot_click_time):
+  def show_tracer(self, shotID, start, velocity, shot_click_time):
 
     print_debug('[show_tracer] shotID: %d' % shotID)
     if BigWorld.serverTime() - shot_click_time < 5 and shotID not in self.on_shot_loggers:

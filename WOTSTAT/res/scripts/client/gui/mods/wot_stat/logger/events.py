@@ -193,7 +193,7 @@ class OnShot(DynamicBattleEvent, SessionMeta, ServerInfo):
     self.tracerStart = None
     self.tracerEnd = None
     self.tracerVel = None
-    self.gravity = None
+    self.acceleration = None
 
     self.hitVehicleDescr = None
     self.hitChassisDescr = None
@@ -261,11 +261,11 @@ class OnShot(DynamicBattleEvent, SessionMeta, ServerInfo):
     self.turretYaw = turret_yaw
     self.turretPitch = turret_pitch
 
-  def set_tracer(self, shot_id, start, velocity, gravity):
+  def set_tracer(self, shot_id, start, velocity, acceleration):
     self.shotId = shot_id
     self.tracerStart = start
     self.tracerVel = velocity
-    self.gravity = gravity
+    self.acceleration = acceleration
 
   def set_hit(self, position, reason):
     self.hitPoint = position
