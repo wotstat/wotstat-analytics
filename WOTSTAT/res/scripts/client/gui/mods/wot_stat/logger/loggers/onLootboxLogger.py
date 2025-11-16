@@ -22,12 +22,26 @@ from skeletons.gui.goodies import IGoodiesCache
 from items import vehicles as vehicles_core, ITEM_TYPES, tankmen
 
 from ..wotHookEvents import wotHookEvents
-from ...utils import print_error, print_log, print_warn, print_debug
+from ...utils import print_log, print_warn, print_debug
 from ...common.exceptionSending import with_exception_sending
 from ..events import OnLootboxOpen
 from ..eventLogger import eventLogger
 from ..utils import setup_hangar_event, setup_session_meta, get_private_attr, setup_server_info
 from ...common.crossGameUtils import lootboxKeyPrefix, getLootboxKeyNameByID, getLootboxKeyNameByTokenID
+
+
+try: 
+  from new_year.ny_constants import CurrentNYConstants, YEARS_INFO
+  NY_CURRENT_YEAR = YEARS_INFO.CURRENT_YEAR
+  NY_TOYS_TOKEN = CurrentNYConstants.TOYS
+
+except ImportError:
+  NY_CURRENT_YEAR = 26
+  NY_TOYS_TOKEN = 'ny26Toys'
+
+
+NY_MANDARIN_COMPENSATION_PREFIX = 'lb_comp:ny{}_mandarin:'.format(NY_CURRENT_YEAR)
+NY_MANDARIN_TOKEN = 'ny{}_mandarin'.format(NY_CURRENT_YEAR)
 
 
 def prepareString(obj):
@@ -382,21 +396,16 @@ class OnLootboxLogger:
       elif tokenID.startswith(CREW_BONUS_X3_TOKEN):
         parsed['bonusTokens'].append(('crew_bonus_x3', count))
         
-      elif tokenID == 'ny25_mandarin':
-        parsed['extraTokens'].append(('ny25_mandarin', count))
+      elif tokenID == NY_MANDARIN_TOKEN:
+        parsed['extraTokens'].append((NY_MANDARIN_TOKEN, count))
 
   @with_exception_sending
   def parseEntitlements(self, parsed, bonus):
-    # TODO: Remove try-except after testing
-    try:
-      parsed['entitlements'] = []
-      entitlements = bonus.get('entitlements', {})
-      for eId, data in entitlements.iteritems():
-        count = data.get('count', 0)
-        parsed['entitlements'].append((eId, count))
-    except Exception as e:
-      print_error('OnLootboxLogger.parseEntitlements exception: {}'.format(e))
-      parsed['entitlements'] = []
+    parsed['entitlements'] = []
+    entitlements = bonus.get('entitlements', {})
+    for eId, data in entitlements.iteritems():
+      count = data.get('count', 0)
+      parsed['entitlements'].append((eId, count))
 
   @with_exception_sending
   def parseCustomizations(self, parsed, bonus):
@@ -454,18 +463,18 @@ class OnLootboxLogger:
   def parseNewYearToys(self, parsed, bonus):
     parsed['toys'] = []
     
-    toys = bonus.get('ny25Toys', {})
+    toys = bonus.get(NY_TOYS_TOKEN, {})
     for toyID, count in toys.iteritems():
-      parsed['toys'].append(('ny25_' + str(toyID), count))
+      parsed['toys'].append(('ny{}_{}'.format(NY_CURRENT_YEAR, toyID), count))
       
     
     parsed['compensatedToys'] = []
     for tokenID, tokenValue in bonus.get('tokens', {}).iteritems():
-      if tokenID.startswith('lb_comp:ny25_mandarin:'):
+      if tokenID.startswith(NY_MANDARIN_COMPENSATION_PREFIX):
         amount = int(tokenID.split(':')[2])
         toy = tokenID.split(':')[3]
         count = tokenValue['count']
-        parsed['compensatedToys'].append((toy, 'ny25_mandarin', amount * count))
+        parsed['compensatedToys'].append((toy, NY_MANDARIN_TOKEN, amount * count))
         
     print(parsed['compensatedToys'])
 
