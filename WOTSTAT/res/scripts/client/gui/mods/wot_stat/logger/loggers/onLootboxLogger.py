@@ -321,7 +321,25 @@ class OnLootboxLogger:
       parsed[currenciesKey] = bonus.get(currenciesKey, 0)
 
     platformCurrencies = bonus.get('currencies', {})
-    parsed['currencies'] = [[currency, int(countDict)] for currency, countDict in platformCurrencies.iteritems()]
+    
+    currencies = []
+    for currency, countDict in platformCurrencies.iteritems():
+      amount = 0
+      if isinstance(countDict, dict):
+        amount = countDict.get('count', 0)
+      elif isinstance(countDict, int):
+        amount = int(countDict)
+      elif isinstance(countDict, float):
+        amount = int(countDict)
+      elif isinstance(countDict, str):
+        try:
+          amount = int(countDict)
+        except ValueError:
+          amount = 0
+        
+      currencies.append((currency, amount))
+    
+    parsed['currencies'] = currencies
   
   @with_exception_sending
   def parsePremium(self, parsed, bonus):
