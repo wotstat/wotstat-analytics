@@ -36,7 +36,6 @@ class WotHookEvents:
     self.VehicleGunRotator_start = SendExceptionEvent()
     self.Vehicle_onEnterWorld = SendExceptionEvent()
     # -------------------MOVE------------------#
-    self.VehicleGunRotator_setShotPosition = SendExceptionEvent()
     self.VehicleGunRotator_updateGunMarker = SendExceptionEvent()
     self.PlayerAvatar_updateGunMarker = SendExceptionEvent()
     # -------------------SHOT------------------#
@@ -121,11 +120,6 @@ def onArenaPeriodChange(self, *a, **k):
 
 
 # -------------------MOVE------------------#
-
-@g_overrideLib.registerEvent(VehicleGunRotator, 'setShotPosition')
-def setShotPosition(self, *a, **k):
-  wotHookEvents.VehicleGunRotator_setShotPosition(self, *a, **k)
-
 
 @g_overrideLib.registerEvent(VehicleGunRotator, '_VehicleGunRotator__updateGunMarker')
 def updateGunMarker(self, *a, **k):
