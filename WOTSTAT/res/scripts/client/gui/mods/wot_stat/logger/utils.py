@@ -11,6 +11,7 @@ from .extra.ExtraCollector import ExtraCollector
 
 from .arenaInfoProvider import ArenaInfoProvider
 from .serverOnlineProvider import ServerOnlineProvider
+from .accountStatsProvider import AccountStatsProvider
 
 from .events import DynamicBattleEvent, SessionMeta, ServerInfo, HangarEvent  # noqa: F401
 
@@ -26,6 +27,7 @@ BATTLE_EVENT = dict([(v, k) for k, v in BATTLE_EVENT_TYPE.__dict__.iteritems() i
 
 arenaInfoProvider = ArenaInfoProvider()
 serverOnlineProvider = ServerOnlineProvider()
+accountStatsProvider = AccountStatsProvider()
 
 
 def short_tank_type(tag):
@@ -92,6 +94,7 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     enemyTeamMaxHealth=arenaInfoProvider.enemyTeamHealth[1],
     allyTeamFragsCount=arenaInfoProvider.allyTeamFragsCount,
     enemyTeamFragsCount=arenaInfoProvider.enemyTeamFragsCount,
+    mapsBlackList=accountStatsProvider.mapBlackList
   )
   
   dynamicBattleEvent.setupExtra(ExtraCollector.instance().getExtraData())

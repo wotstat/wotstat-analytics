@@ -2,6 +2,7 @@ import BattleReplay
 import BigWorld
 from PlayerEvents import g_playerEvents
 from items import vehicles as vehiclesWG
+from constants import FINISH_REASON, FINISH_REASON_NAMES
 from ..eventLogger import eventLogger
 from ..events import OnBattleResult
 from ..sessionStorage import sessionStorage
@@ -9,6 +10,42 @@ from ..utils import short_tank_type, get_tank_role, setup_dynamic_battle_info, s
 from ...common.exceptionSending import with_exception_sending
 from ...utils import print_log, print_debug
 
+
+def parseCurrencies(results):
+  # type: (dict) -> dict
+  
+  currencies = {
+    'originalCredits': results.get('originalCredits', 0),
+    'originalGold': results.get('originalGold', 0),
+    'originalCrystal': results.get('originalCrystal', 0),
+    'subtotalCredits': results.get('subtotalCredits', 0),
+    'autoRepairCost': 0,
+    'autoLoadCredits': 0,
+    'autoLoadGold': 0,
+    'autoEquipCredits': 0,
+    'autoEquipGold': 0,
+    'autoEquipCrystals': 0,
+    'piggyBank': 0,
+  }
+  
+  if 'autoRepairCost' in results:
+    currencies['autoRepairCost'] = results.get('autoRepairCost', 0)
+    
+  if 'autoLoadCost' in results:
+    cost = results.get('autoLoadCost', (0, 0))
+    currencies['autoLoadCredits'] = cost[0]
+    currencies['autoLoadGold'] = cost[1]
+      
+  if 'autoEquipCost' in results:
+    cost = results.get('autoEquipCost', (0, 0, 0))
+    currencies['autoEquipCredits'] = cost[0]
+    currencies['autoEquipGold'] = cost[1]
+    currencies['autoEquipCrystals'] = cost[2]
+      
+  if 'piggyBank' in results:
+    currencies['piggyBank'] = results.get('piggyBank', 0)
+      
+  return currencies
 
 class OnBattleResultLogger:
   arenas_id_wait_battle_result = []
@@ -116,6 +153,8 @@ class OnBattleResultLogger:
           'maxHealth': vehicle['maxHealth'],
           'health': max(0, vehicle['health']),
           'isAlive': vehicle['health'] > 0,
+          'comp7PrestigePoints': vehicle.get('comp7PrestigePoints', 0),
+          'xp': vehicle.get('xp', 0),
         }
 
       for vehicleId in vehicles:
@@ -131,7 +170,6 @@ class OnBattleResultLogger:
           'squadID': squadStorage[squadID] if squadID in squadStorage else 0,
           'bdid': bdid,
           'team': player['team'],
-          'xp': vehicle['xp'],
           'playerRank': avatar['playerRank'],
           '__vehicleId': vehicleId
         }
@@ -160,6 +198,15 @@ class OnBattleResultLogger:
         'squadID': squadStorage[squadID] if squadID in squadStorage else 0,
         'playerRank': avatar['playerRank'],
       }
+      
+      comp7 = {
+        'ratingDelta': avatar.get('comp7RatingDelta', 0),
+        'rating': avatar.get('comp7Rating', 0) + avatar.get('comp7RatingDelta', 0),
+        'qualBattleIndex': avatar.get('comp7QualBattleIndex', 0),
+        'qualActive': avatar.get('comp7QualActive', False),
+      }
+      
+      currencies = parseCurrencies(personalRes)
 
       personal.update(getVehicleInfo(personalRes))
 
@@ -168,12 +215,14 @@ class OnBattleResultLogger:
       decodeResult['result'] = battle_result
       decodeResult['teamHealth'] = teamHealth
       decodeResult['personal'] = personal
+      decodeResult['comp7'] = comp7
       decodeResult['playersResults'] = playersResultList
-      decodeResult['credits'] = avatar['credits']
-      decodeResult['originalCredits'] = personalRes['originalCredits']
       decodeResult['duration'] = results['common']['duration']
+      decodeResult['finishReason'] = FINISH_REASON_NAMES.get(results['common']['finishReason'], FINISH_REASON_NAMES[FINISH_REASON.UNKNOWN])
       decodeResult['winnerTeam'] = winnerTeam
       decodeResult['arenaID'] = arenaID
+      decodeResult['currencies'] = currencies
+      decodeResult['isPremium'] = personalRes.get('isPremium', False)
 
       setup_session_meta(battleEvent)
       battleEvent.set_result(result=decodeResult)

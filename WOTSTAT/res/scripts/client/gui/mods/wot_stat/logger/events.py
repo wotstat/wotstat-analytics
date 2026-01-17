@@ -17,8 +17,10 @@ class Event:
     ON_BATTLE_RESULT = 'OnBattleResult'
     ON_LOOTBOX_OPEN = 'OnLootboxOpen'
     ON_MOE_INFO = 'OnMoeInfo'
+    ON_COMP7_INFO = 'OnComp7Info'
+    ON_ACCOUNT_STATS = 'OnAccountStats'
 
-    HANGAR_EVENTS = [ON_LOOTBOX_OPEN, ON_MOE_INFO]
+    HANGAR_EVENTS = [ON_LOOTBOX_OPEN, ON_MOE_INFO, ON_COMP7_INFO, ON_ACCOUNT_STATS]
 
 
   def __init__(self, event_name):
@@ -119,10 +121,11 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.enemyTeamMaxHealth = None
     self.allyTeamFragsCount = None
     self.enemyTeamFragsCount = None
+    self.mapsBlackList = None
 
   def setupDynamicBattleInfo(self, arenaTag, playerName, playerClan, accountDBID, battleMode, battleGameplay,
                              team, tankTag, tankType, tankRole, tankLevel,gunTag, allyTeamHealth, enemyTeamHealth,
-                             allyTeamMaxHealth, enemyTeamMaxHealth, allyTeamFragsCount, enemyTeamFragsCount):
+                             allyTeamMaxHealth, enemyTeamMaxHealth, allyTeamFragsCount, enemyTeamFragsCount, mapsBlackList):
     self.arenaTag = arenaTag
     self.playerName = playerName
     self.playerClan = playerClan
@@ -141,7 +144,7 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.enemyTeamMaxHealth = enemyTeamMaxHealth
     self.allyTeamFragsCount = allyTeamFragsCount
     self.enemyTeamFragsCount = enemyTeamFragsCount
-
+    self.mapsBlackList = mapsBlackList
 
 class OnBattleStart(DynamicBattleEvent, SessionMeta, ServerInfo):
 
@@ -328,6 +331,32 @@ class OnMoeInfo(HangarEvent):
     self.tankTag = tankTag
     self.battleCount = battleCount
     self.moeDistribution = moeDistribution
-    
+
+class OnComp7Info(HangarEvent):
+  def __init__(self, season, rating, eliteRating):
+    HangarEvent.__init__(self, Event.NAMES.ON_COMP7_INFO)
+    self.season = season
+    self.rating = rating
+    self.eliteRating = eliteRating
+
+class OnAccountStats(HangarEvent):
+  def __init__(self, credits, gold, crystal, equipCoin, bpCoin, eventCoin, freeXP, piggyBankCredits, piggyBankGold,
+               premiumPlusExpiryTime, isPremiumPlus, isWotPlus, wotPlusExpiryTime, telecom):
+    HangarEvent.__init__(self, Event.NAMES.ON_ACCOUNT_STATS)
+    self.credits = credits
+    self.gold = gold
+    self.crystal = crystal
+    self.equipCoin = equipCoin
+    self.bpCoin = bpCoin
+    self.eventCoin = eventCoin
+    self.freeXP = freeXP
+    self.isPremiumPlus = isPremiumPlus
+    self.premiumPlusExpiryTime = premiumPlusExpiryTime
+    self.isWotPlus = isWotPlus
+    self.wotPlusExpiryTime = wotPlusExpiryTime
+    self.telecom = telecom
+    self.piggyBankCredits = piggyBankCredits
+    self.piggyBankGold = piggyBankGold
+
 def get_current_date():
   return datetime.datetime.now().isoformat()  # TODO: Лучше брать серверное время танков, если такое есть
