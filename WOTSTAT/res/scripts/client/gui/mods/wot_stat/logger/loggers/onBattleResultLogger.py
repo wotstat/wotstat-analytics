@@ -1,8 +1,16 @@
 import BattleReplay
 import BigWorld
+import json
+import personal_missions
 from PlayerEvents import g_playerEvents
+from skeletons.gui.server_events import IEventsCache
 from items import vehicles as vehiclesWG
 from constants import FINISH_REASON, FINISH_REASON_NAMES
+from helpers import dependency
+
+try: from potapov_quests import PQ_STATE as PM_STATE
+except ImportError: from pm_quests import PM_STATE
+
 from ..eventLogger import eventLogger
 from ..events import OnBattleResult
 from ..sessionStorage import sessionStorage
@@ -10,6 +18,12 @@ from ..utils import short_tank_type, get_tank_role, setup_dynamic_battle_info, s
 from ...common.exceptionSending import with_exception_sending
 from ...utils import print_log, print_debug
 
+import typing
+if typing.TYPE_CHECKING:
+  from gui.server_events.event_items import PersonalMission
+
+
+PM_STATE_NAMES = dict([(v, k) for k, v in PM_STATE.__dict__.iteritems() if isinstance(v, int)])
 
 def parseCurrencies(results):
   # type: (dict) -> dict
@@ -47,9 +61,60 @@ def parseCurrencies(results):
       
   return currencies
 
+def parsePersonalMissions(results):
+  # type: (dict) -> dict
+  pmProgress = results.get('PMProgress', {}) # type: dict
+  pm2Progress = results.get('PM2Progress', {}) # type: dict
+  pmProgress.update(pm2Progress)
+
+  quests = dependency.instance(IEventsCache).getPersonalMissions().getAllQuests()
+
+  parsedPmQuests = []
+
+  for qID, data in pmProgress.iteritems():
+    if qID not in quests: continue
+    quest = quests[qID] # type: PersonalMission
+    tag = quest.getGeneralQuestID()
+    current = data.get('current', None)
+    if not current: continue
+
+    parsedConditions = []
+    for condition, progress in current.iteritems():
+      state = progress.get('state', None)
+      stateName = PM_STATE_NAMES.get(state, 'UNKNOWN')
+
+      battles = progress.get('battles', None)
+      battlesArray = battles if isinstance(battles, list) else None
+      isBattlesAreBool = battlesArray and all(isinstance(b, bool) for b in battlesArray)
+      
+      parsedConditions.append({
+        'tag': condition,
+        'state': stateName,
+        'value': progress.get('value', None),
+        'goal': progress.get('goal', None),
+        'battles': battlesArray if isBattlesAreBool else None,
+      })
+
+    parsedPmQuests.append({
+      'tag': tag,
+      'conditions': parsedConditions
+    })
+
+  questsProgress = results.get('questsProgress', {}) # type: dict
+  for qID, data in questsProgress.iteritems():
+    if not personal_missions.g_cache.isPersonalMission(qID): continue
+    
+    parsedPmQuests.append({
+      'tag': qID,
+      'conditions': []
+    })
+    
+  return parsedPmQuests
+
 class OnBattleResultLogger:
   arenas_id_wait_battle_result = []
   battle_loaded = False
+  eventsCache = dependency.descriptor(IEventsCache)
 
   def __init__(self):
     self.arenas_id_wait_battle_result = []
@@ -198,6 +263,7 @@ class OnBattleResultLogger:
         'squadID': squadStorage[squadID] if squadID in squadStorage else 0,
         'playerRank': avatar['playerRank'],
       }
+      personal.update(getVehicleInfo(personalRes))
       
       comp7 = {
         'ratingDelta': avatar.get('comp7RatingDelta', 0),
@@ -208,7 +274,14 @@ class OnBattleResultLogger:
       
       currencies = parseCurrencies(personalRes)
 
-      personal.update(getVehicleInfo(personalRes))
+      try: parsedPmQuests = parsePersonalMissions(avatar)
+      except: parsedPmQuests = []
+
+      try:
+        progress = avatar.get('PMProgress', {})
+        rawPmQuests = json.dumps(progress)
+      except: rawPmQuests = ''
+      
 
       battle_result = 'tie' if not winnerTeam else 'win' if winnerTeamIsMy else 'lose'
       decodeResult['playerTeam'] = playerTeam
@@ -223,7 +296,8 @@ class OnBattleResultLogger:
       decodeResult['arenaID'] = arenaID
       decodeResult['currencies'] = currencies
       decodeResult['isPremium'] = personalRes.get('isPremium', False)
-
+      decodeResult['personalMissions'] = parsedPmQuests
+      decodeResult['personalMissionsRaw'] = rawPmQuests
       setup_session_meta(battleEvent)
       battleEvent.set_result(result=decodeResult)
       eventLogger.emit_event(battleEvent, arena_id=arenaID)
