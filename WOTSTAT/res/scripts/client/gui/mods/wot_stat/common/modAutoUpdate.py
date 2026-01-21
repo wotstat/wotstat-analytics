@@ -50,7 +50,8 @@ def update_game_version(modName, modVersion):
 
 GH_headers = {
   'X-GitHub-Api-Version': '2022-11-28',
-  'Accept': 'application/vnd.github+json'
+  'Accept': 'application/vnd.github+json',
+  'User-Agent': 'wotstat-mod'
 }
 
 
@@ -124,6 +125,6 @@ def update_mod_version(url, mod_name, current_version, on_start_update=None, on_
 
     if on_start_update:
       on_start_update(latest_version)
-    get_async(downloadUrl, None, end_load_mod)
+    get_async(downloadUrl, {}, end_load_mod)
 
-  get_async(url, None, end_load_info, GH_headers)
+  get_async(url, GH_headers, end_load_info)

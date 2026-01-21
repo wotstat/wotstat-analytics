@@ -156,7 +156,7 @@ class ServerLogger:
       data = {"streams": streams}
 
       send_data = json.dumps(data, ensure_ascii=False)
-      post_async(self.url, data=send_data, error_callback=_on_send_error)
+      post_async(self.url, headers={'Content-type': 'application/json', 'Accept': 'application/json'}, data=send_data, error_callback=_on_send_error)
 
     except:
       print("[WOTSTAT LOGGER EXCEPTION]")

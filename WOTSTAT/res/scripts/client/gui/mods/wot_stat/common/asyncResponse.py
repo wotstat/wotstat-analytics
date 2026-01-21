@@ -1,58 +1,77 @@
 import BigWorld
 
-import threading
-import urllib2
-import ssl
 
-json_headers = {'Content-type': 'application/json',
-                'Accept': 'application/json'}
+json_headers = {
+  'Content-type': 'application/json',
+  'Accept': 'application/json'
+}
 
+API_URL_PREFIX = 'https://wotstat.info'
+SERVERS_BASE_URL = [
+  'https://wotstat.info',
+  'https://ru.wotstat.info',
+  'https://wotstat-proxy.ru'
+]
 
-def get_async(url, data=None, callback=None, headers=None, error_callback=None):
-  request_async(url, data, headers, get, callback, error_callback)
+currentServerIndex = 0
 
+def next_server_index():
+  global currentServerIndex
+  currentServerIndex = (currentServerIndex + 1) % len(SERVERS_BASE_URL)
+  return currentServerIndex
 
-def post_async(url, data=None, callback=None, headers=None, error_callback=None):
-  request_async(url, data, headers, post, callback, error_callback)
+def getApiUrl(url):
+  if url.startswith(API_URL_PREFIX):
+    return url.replace(API_URL_PREFIX, SERVERS_BASE_URL[currentServerIndex], 1)
+  return url
 
+def get_async_api(url, headers={}, callback=None, error_callback=None, attempt=2):
+  def on_error(res):
+    next_server_index()
+    if attempt > 0: get_async_api(url, headers, callback, error_callback, attempt - 1)
+    elif error_callback: error_callback(res)
 
-def request_async(url, data, headers, method, callback, error_callback=None):
-  event = threading.Event()
-  runner = threading.Thread(target=run,
-                            args=(event, url, data, headers, method, callback, error_callback))
-  runner.start()
-  event.wait()
+  get_async(getApiUrl(url), headers, callback, on_error)
 
+def post_async_api(url, data=None, headers={}, callback=None, error_callback=None, attempt=0):
+  def on_error(res):
+    next_server_index()
+    if attempt > 0: post_async_api(url, data, headers, callback, error_callback, attempt - 1)
+    elif error_callback: error_callback(res)
 
-def run(event, url, data, headers, method, callback, error_callback):
-  event.set()
-  try:
-    result = method(url, data, headers)
-    if callback:
-      callback(result)
-  except Exception, e:
-    if error_callback:
-      error_callback(e)
+  post_async(getApiUrl(url), data, headers, callback, on_error)
+
+def get_async(url, headers={}, callback=None, error_callback=None):
+  request_async(
+    method='GET',
+    url=url,
+    headers=headers,
+    postData=None,
+    callback=callback,
+    error_callback=error_callback
+  )
+
+def post_async(url, data=None, headers={}, callback=None, error_callback=None):
+  request_async(
+    method='POST',
+    url=url,
+    headers=headers,
+    postData=data,
+    callback=callback,
+    error_callback=error_callback
+  )
+
+def request_async(method, url, headers, postData, callback, error_callback=None):
+
+  def onComplete(result):
+    # type: (str) -> None
+    print('[WOTSTAT_ANALYTICS] request_async onComplete: %s %s (%s)' % (method, url, str(result.responseCode)))
+    if result.responseCode != 200:
+      if error_callback: error_callback(result)
+      return
     else:
-      raise e
+      if callback: callback(result.body)
+      return
 
-
-def get(url, data, headers):
-  context = ssl._create_unverified_context()
-  if data:
-    params = urllib2.urlencode(data)
-    url = '?'.join(url, params)
-  if headers:
-    req = urllib2.Request(url, headers=headers)
-    return urllib2.urlopen(req, context=context).read()
-  else:
-    return urllib2.urlopen(url, context=context).read()
-
-
-def post(url, data, headers):
-  context = ssl._create_unverified_context()
-  if data:
-    req = urllib2.Request(url, data, headers=json_headers)
-    return urllib2.urlopen(req, context=context).read()
-  else:
-    return urllib2.urlopen(url, context=context).read()
+  print('[WOTSTAT_ANALYTICS] request_async: %s %s' % (method, url))
+  BigWorld.fetchURL(url, onComplete, method=method, headers=headers, postData=postData, timeout=10)

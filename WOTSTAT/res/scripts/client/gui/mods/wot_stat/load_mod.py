@@ -10,7 +10,7 @@ from gui import SystemMessages
 from .common.modAutoUpdate import update_game_version, update_mod_version
 from .common.modNotification import show_notification, show_open_web_browser, on_hangar_loaded, \
   OPEN_PERSONAL_WOTSTAT_EVENT
-from .common.asyncResponse import get_async
+from .common.asyncResponse import get_async_api
 from .common.i18n import t
 
 from .utils import print_log, print_error
@@ -19,6 +19,7 @@ from .logger.sessionStorage import sessionStorage
 from .logger.extra.ExtraCollector import ExtraCollector
 from .common.serverLogger import setupLogger, send
 from .thirdParty.FixedBattleResultsCache import setup as setupFixedBattleResultsCache
+from .common.crossGameUtils import gamePublisher, PUBLISHER
 
 MOD_NAME_PREFIX = 'mod.wotStat'
 
@@ -65,7 +66,8 @@ def hello_message():
   if not api_server_time: return
   if not BigWorld.player(): return
 
-  target_url = 'wotstat.info/session?mode=any&nickname=%s&from=%s' % (BigWorld.player().name, api_server_time)
+  base = 'ru.wotstat.info' if gamePublisher() == PUBLISHER.LESTA else 'wotstat.info'
+  target_url = '%s/session?mode=any&nickname=%s&from=%s' % (base, BigWorld.player().name, api_server_time)
   print_log(target_url)
 
   try:
@@ -102,7 +104,7 @@ def init_mod():
     print_log(e)
     show_notification(t('serverNotResponse'), message_type=SystemMessages.SM_TYPE.ErrorSimple)
 
-  get_async(config.get('statusURL'), callback=on_status_check, error_callback=on_status_check_fail)
+  get_async_api(config.get('statusURL'), {}, callback=on_status_check, error_callback=on_status_check_fail)
 
   if not config.get('disableCopyToFuture'):
     update_game_version(MOD_NAME_PREFIX, config.get('version'))

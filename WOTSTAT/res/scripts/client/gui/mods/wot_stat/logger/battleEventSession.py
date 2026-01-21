@@ -2,7 +2,7 @@ import json
 
 import BigWorld
 from events import Event, OnBattleStart, OnBattleResult
-from ..common.asyncResponse import post_async
+from ..common.asyncResponse import post_async_api
 from ..common.exceptionSending import with_exception_sending
 from ..utils import print_log, print_debug
 
@@ -36,7 +36,7 @@ class BattleEventSession:
 
     data = json.dumps(on_end_load_event.get_dict())
     print_debug(data)
-    post_async(self.initURL, encrypt(data), self.__init_send_callback)
+    post_async_api(self.initURL, encrypt(data), {}, self.__init_send_callback, attempt=3)
 
   def add_event(self, event):
     # type: (Event) -> None
@@ -72,7 +72,7 @@ class BattleEventSession:
         'events': map(lambda t: t.get_dict(), events)
       }
       print_log(json.dumps(data))
-      post_async(self.eventURL, encrypt(json.dumps(data)), callback)
+      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, attempt=0)
 
 
 class HangarEventSession:
@@ -97,4 +97,4 @@ class HangarEventSession:
         'events': map(lambda t: t.get_dict(), events)
       }
       print_debug(json.dumps(data))
-      post_async(self.eventURL, encrypt(json.dumps(data)), callback)
+      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, attempt=0)
