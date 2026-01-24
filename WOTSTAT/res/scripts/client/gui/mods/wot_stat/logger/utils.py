@@ -9,9 +9,10 @@ from ..common.exceptionSending import with_exception_sending
 from ..load_mod import config
 from .extra.ExtraCollector import ExtraCollector
 
-from .arenaInfoProvider import ArenaInfoProvider
-from .serverOnlineProvider import ServerOnlineProvider
-from .accountStatsProvider import AccountStatsProvider
+from .providers.ArenaInfoProvider import ArenaInfoProvider
+from .providers.AccountStatsProvider import AccountStatsProvider
+from .providers.ServerOnlineProvider import ServerOnlineProvider
+from .providers.SystemInfoProvider import SystemInfoProvider
 
 from .events import DynamicBattleEvent, SessionMeta, ServerInfo, HangarEvent  # noqa: F401
 
@@ -28,6 +29,7 @@ BATTLE_EVENT = dict([(v, k) for k, v in BATTLE_EVENT_TYPE.__dict__.iteritems() i
 arenaInfoProvider = ArenaInfoProvider()
 serverOnlineProvider = ServerOnlineProvider()
 accountStatsProvider = AccountStatsProvider()
+systemInfoProvider = SystemInfoProvider()
 
 
 def short_tank_type(tag):
@@ -96,14 +98,16 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     enemyTeamFragsCount=arenaInfoProvider.enemyTeamFragsCount,
     mapsBlackList=accountStatsProvider.mapBlackList
   )
-  
+  dynamicBattleEvent.setupSystemInfo(systemInfoProvider.getSystemInfo())
   dynamicBattleEvent.setupExtra(ExtraCollector.instance().getExtraData())
 
+@with_exception_sending
 def setup_session_meta(dynamicBattleEvent):
   # type: (SessionMeta) -> None
   
   sessionStorage.setup_session_meta(dynamicBattleEvent)
 
+@with_exception_sending
 def setup_hangar_event(hangarEvent):
   # type: (HangarEvent) -> None
 

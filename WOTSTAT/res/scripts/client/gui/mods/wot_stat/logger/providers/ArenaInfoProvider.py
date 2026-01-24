@@ -1,9 +1,8 @@
 import BigWorld
-from ..utils import print_log, print_debug, print_warn
-from .wotHookEvents import wotHookEvents
+from ..wotHookEvents import wotHookEvents
 from helpers import dependency
 from skeletons.gui.battle_session import IBattleSessionProvider
-from ..common.exceptionSending import with_exception_sending
+from ...common.exceptionSending import with_exception_sending
 
 
 class VehicleInfo():

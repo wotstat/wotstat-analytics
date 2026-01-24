@@ -1,6 +1,6 @@
 from PlayerEvents import g_playerEvents
 
-from ..common.exceptionSending import with_exception_sending
+from ...common.exceptionSending import with_exception_sending
 
 class ServerOnlineProvider():
   

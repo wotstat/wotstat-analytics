@@ -146,6 +146,9 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.enemyTeamFragsCount = enemyTeamFragsCount
     self.mapsBlackList = mapsBlackList
 
+  def setupSystemInfo(self, info):
+    self.systemInfo = info
+
 class OnBattleStart(DynamicBattleEvent, SessionMeta, ServerInfo):
 
   def __init__(self, arenaId, spawnPoint, battleTime,

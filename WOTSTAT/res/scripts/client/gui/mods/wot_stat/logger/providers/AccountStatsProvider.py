@@ -1,9 +1,9 @@
-from PlayerEvents import g_playerEvents
-from helpers import dependency
-from skeletons.gui.shared import IItemsCache
 import ArenaType
 
-from ..common.exceptionSending import with_exception_sending
+from helpers import dependency
+from skeletons.gui.shared import IItemsCache
+
+from ...common.exceptionSending import with_exception_sending
 
 class AccountStatsProvider():
   
