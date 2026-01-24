@@ -65,7 +65,6 @@ def request_async(method, url, headers, postData, callback, error_callback=None)
 
   def onComplete(result):
     # type: (str) -> None
-    print('[WOTSTAT_ANALYTICS] request_async onComplete: %s %s (%s)' % (method, url, str(result.responseCode)))
     if result.responseCode != 200:
       if error_callback: error_callback(result)
       return
@@ -73,5 +72,4 @@ def request_async(method, url, headers, postData, callback, error_callback=None)
       if callback: callback(result.body)
       return
 
-  print('[WOTSTAT_ANALYTICS] request_async: %s %s' % (method, url))
   BigWorld.fetchURL(url, onComplete, method=method, headers=headers, postData=postData, timeout=10)

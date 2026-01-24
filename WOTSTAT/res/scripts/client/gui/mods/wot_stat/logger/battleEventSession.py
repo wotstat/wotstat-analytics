@@ -4,7 +4,7 @@ import BigWorld
 from events import Event, OnBattleStart, OnBattleResult
 from ..common.asyncResponse import post_async_api
 from ..common.exceptionSending import with_exception_sending
-from ..utils import print_log, print_debug
+from ..utils import print_log, print_error
 
 try:
   from ..common.crypto import encrypt
@@ -35,7 +35,7 @@ class BattleEventSession:
     self.enable = False
 
     data = json.dumps(on_end_load_event.get_dict())
-    print_debug(data)
+    print_log(data)
     post_async_api(self.initURL, encrypt(data), {}, self.__init_send_callback, attempt=3)
 
   def add_event(self, event):
@@ -66,13 +66,17 @@ class BattleEventSession:
       BigWorld.callback(self.send_interval, self.__send_event_loop)
 
   @with_exception_sending
+  def onErrorCallback(self, res):
+    print_error('Send battle event error: [%s] %s' % (str(res.responseCode), str(res.body)))
+
+  @with_exception_sending
   def __post_events(self, events, callback=None):
     if events and len(events) > 0:
       data = {
         'events': map(lambda t: t.get_dict(), events)
       }
       print_log(json.dumps(data))
-      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, attempt=0)
+      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, error_callback=self.onErrorCallback, attempt=0)
 
 
 class HangarEventSession:
@@ -91,10 +95,15 @@ class HangarEventSession:
     self.send_queue = []
 
   @with_exception_sending
+  def onErrorCallback(self, res):
+    print_error('Send hangar event error: [%s] %s' % (str(res.responseCode), str(res.body)))
+
+  @with_exception_sending
   def __post_events(self, events, callback=None):
+
     if events and len(events) > 0:
       data = {
         'events': map(lambda t: t.get_dict(), events)
       }
-      print_debug(json.dumps(data))
-      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, attempt=0)
+      print_log(json.dumps(data))
+      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, error_callback=self.onErrorCallback, attempt=0)

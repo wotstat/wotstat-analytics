@@ -333,11 +333,12 @@ class OnMoeInfo(HangarEvent):
     self.moeDistribution = moeDistribution
 
 class OnComp7Info(HangarEvent):
-  def __init__(self, season, rating, eliteRating):
+  def __init__(self, season, rating, eliteRating, leaderboardPosition):
     HangarEvent.__init__(self, Event.NAMES.ON_COMP7_INFO)
     self.season = season
     self.rating = rating
     self.eliteRating = eliteRating
+    self.leaderboardPosition = leaderboardPosition
 
 class OnAccountStats(HangarEvent):
   def __init__(self, credits, gold, crystal, equipCoin, bpCoin, eventCoin, freeXP, piggyBankCredits, piggyBankGold,

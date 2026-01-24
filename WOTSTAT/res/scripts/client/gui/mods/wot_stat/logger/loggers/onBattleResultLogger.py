@@ -16,7 +16,7 @@ from ..events import OnBattleResult
 from ..sessionStorage import sessionStorage
 from ..utils import short_tank_type, get_tank_role, setup_dynamic_battle_info, setup_session_meta, setup_server_info
 from ...common.exceptionSending import with_exception_sending
-from ...utils import print_log, print_debug
+from ...utils import print_debug, print_error
 
 import typing
 if typing.TYPE_CHECKING:
@@ -308,7 +308,7 @@ class OnBattleResultLogger:
                                       players_results=playersResultList)
 
     except Exception as e:
-      print_log('cannot decode battle result\n' + str(e))
+      print_error('cannot decode battle result\n' + str(e))
 
 
 onBattleResultLogger = OnBattleResultLogger()
