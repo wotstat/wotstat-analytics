@@ -15,11 +15,12 @@ from ...common.exceptionSending import with_exception_sending
 class Comp7Logger:
   
   itemsCache = dependency.descriptor(IItemsCache) # type: IItemsCache
-  comp7Controller = dependency.instance(IComp7Controller) # type: IComp7Controller
+  comp7Controller = dependency.descriptor(IComp7Controller) # type: IComp7Controller
   
   def __init__(self):
     self._lastEliteTrashload = None
     self._lastRating = None
+    self._leaderboardPosition = None
 
     self.itemsCache.onSyncCompleted += self.onItemsCacheSyncCompleted
     self.comp7Controller.onRankUpdated += self.onComp7RankUpdated
@@ -72,16 +73,21 @@ class Comp7Logger:
     eliteTrashload, status = yield self.comp7Controller.leaderboard.getLastEliteRating()
     if not status: return
 
+    ownData = yield self.comp7Controller.leaderboard.getOwnData()
+    if ownData is None: return
+    leaderboardPosition = ownData.position if ownData.isSuccess else None
+
     currentRating = self.getCurrentRating()
     if currentRating is None: return
 
-    if self._lastEliteTrashload == eliteTrashload and self._lastRating == currentRating:
+    if self._lastEliteTrashload == eliteTrashload and self._lastRating == currentRating and self._leaderboardPosition == leaderboardPosition:
       return
     
     self._lastEliteTrashload = eliteTrashload
     self._lastRating = currentRating
+    self._leaderboardPosition = leaderboardPosition
 
-    event = OnComp7Info(season, currentRating, eliteTrashload)
+    event = OnComp7Info(season, currentRating, eliteTrashload, leaderboardPosition)
     setup_hangar_event(event)
     eventLogger.emit_event(event)
 
