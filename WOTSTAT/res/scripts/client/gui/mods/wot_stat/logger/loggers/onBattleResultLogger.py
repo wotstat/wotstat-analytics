@@ -258,12 +258,12 @@ class OnBattleResultLogger:
       squadID = players[avatar['accountDBID']]['prebattleID']
       personal = {
         'team': avatar['team'],
-        'xp': personalRes['originalXP'],
         'killerIndex': indexById[killerId] if killerId in indexById else -1,
         'squadID': squadStorage[squadID] if squadID in squadStorage else 0,
         'playerRank': avatar['playerRank'],
       }
       personal.update(getVehicleInfo(personalRes))
+      personal.update({'xp': personalRes['originalXP']})
       
       comp7 = {
         'ratingDelta': avatar.get('comp7RatingDelta', 0),
