@@ -20,11 +20,20 @@ __logs_queue = []
 
 GAME_VERSION = readClientServerVersion()[1]
 
+SERVERS_URL = [
+  'https://loki.wotstat.info/loki/api/v1/push',
+  'https://ru.loki.wotstat.info/loki/api/v1/push',
+  'https://teleport-msk-1.openwg.net/loki.wotstat.info/loki/api/v1/push',
+  'https://teleport-spb-1.openwg.net/loki.wotstat.info/loki/api/v1/push',
+  'http://teleport-msk-1.openwg.net/loki.wotstat.info/loki/api/v1/push'
+]
+JSON_HEADERS = {'Content-type': 'application/json', 'Accept': 'application/json'}
 
-def setupLogger(url, version):
+
+def setupLogger(version):
   global logger, modVersion
   modVersion = version
-  logger = ServerLogger(url)
+  logger = ServerLogger()
   for log in __logs_queue:
     logger.send(log[0], log[1])
 
@@ -107,22 +116,26 @@ class Message:
     self.time = int(time.time() * 1e9)
 
 
-def _on_send_error(res):
-  print('[WOTSTAT LOGGER] sending error')
-  print(res)
-
-
 class ServerLogger:
-  session_id = _generate_session_id()
-  logs_queue = []  # type: List[Message]
 
-  def __init__(self, url):
-    self.url = url
-    print("[WOTSTAT LOGGER]: Init server logger to: %s", self.url)
+  def __init__(self):
+    print("[WOTSTAT LOGGER]: Init server logger")
+    self.session_id = _generate_session_id()
+    self.logs_queue = []  # type: List[Message]
+    self.urlIndex = 0
+
     self._sending_loop()
 
   def send(self, level, msg):
     self.logs_queue.append(Message(level, msg))
+
+  def getUrl(self):
+    return SERVERS_URL[self.urlIndex]
+
+  def __onSendError(self, res):
+    # type: (BigWorld.PyURLResponse) -> None
+    print('[WOTSTAT LOGGER] sending error [%s] to %s' % (res.responseCode, self.getUrl()))
+    self.urlIndex = (self.urlIndex + 1) % len(SERVERS_URL)
 
   def _sending_loop(self):
     BigWorld.callback(10, self._sending_loop)
@@ -155,8 +168,8 @@ class ServerLogger:
 
       data = {"streams": streams}
 
-      send_data = json.dumps(data, ensure_ascii=False)
-      post_async(self.url, headers={'Content-type': 'application/json', 'Accept': 'application/json'}, data=send_data, error_callback=_on_send_error)
+      serializedData = json.dumps(data, ensure_ascii=False)
+      post_async(self.getUrl(), headers=JSON_HEADERS, data=serializedData, error_callback=self.__onSendError)
 
     except:
       print("[WOTSTAT LOGGER EXCEPTION]")

@@ -95,7 +95,7 @@ def hello_message():
 
 def init_mod():
   print_log('version ' + config.get('version'))
-  setupLogger(config.get('lokiURL'), config.get('version'))
+  setupLogger(config.get('version'))
 
   def update_end(version):
     show_notification(t('modUpdated') % version, message_type=SystemMessages.SM_TYPE.Warning)
