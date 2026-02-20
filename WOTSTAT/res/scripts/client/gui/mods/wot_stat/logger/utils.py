@@ -81,6 +81,7 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     arenaTag=player.arena.arenaType.geometry,
     playerName=player.name,
     playerClan=player.arena.vehicles[player.playerVehicleID]['clanAbbrev'],
+    playerClanDBID=player.arena.vehicles[player.playerVehicleID]['clanDBID'],
     accountDBID=player.arena.vehicles[player.playerVehicleID]['accountDBID'],
     battleMode=ARENA_TAGS[player.arena.bonusType],
     battleGameplay=ARENA_GAMEPLAY_NAMES[player.arenaTypeID >> 16],

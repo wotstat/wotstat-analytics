@@ -1,10 +1,12 @@
 import json
 
 import BigWorld
+import uuid
 from events import Event, OnBattleStart, OnBattleResult
 from ..common.asyncResponse import post_async_api
 from ..common.exceptionSending import with_exception_sending
 from ..utils import print_log, print_error
+from ids_generators import SequenceIDGenerator
 
 try:
   from ..common.crypto import encrypt
@@ -13,6 +15,10 @@ except:
   from ..common.cryptoPlaceholder import encrypt
   print_log('import cryptoPlaceholder')
 
+deduplicationIdPrefix = str(uuid.uuid4())
+deduplicationIdGenerator = SequenceIDGenerator()
+def getNextDeduplicationId():
+  return deduplicationIdPrefix + '-' + str(deduplicationIdGenerator.next())
 
 class BattleEventSession:
   send_queue = []
@@ -73,10 +79,11 @@ class BattleEventSession:
   def __post_events(self, events, callback=None):
     if events and len(events) > 0:
       data = {
+        'deduplicationId': getNextDeduplicationId(),
         'events': map(lambda t: t.get_dict(), events)
       }
       print_log(json.dumps(data))
-      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, error_callback=self.onErrorCallback, attempt=0)
+      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, error_callback=self.onErrorCallback, attempt=2)
 
 
 class HangarEventSession:
@@ -103,7 +110,8 @@ class HangarEventSession:
 
     if events and len(events) > 0:
       data = {
+        'deduplicationId': getNextDeduplicationId(),
         'events': map(lambda t: t.get_dict(), events)
       }
       print_log(json.dumps(data))
-      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, error_callback=self.onErrorCallback, attempt=0)
+      post_async_api(self.eventURL, encrypt(json.dumps(data)), {}, callback, error_callback=self.onErrorCallback, attempt=2)

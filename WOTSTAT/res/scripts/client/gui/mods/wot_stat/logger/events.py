@@ -106,6 +106,7 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.arenaTag = None
     self.playerName = None
     self.playerClan = None
+    self.playerClanDBID = None
     self.accountDBID = None
     self.battleMode = None
     self.battleGameplay = None
@@ -123,12 +124,13 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.enemyTeamFragsCount = None
     self.mapsBlackList = None
 
-  def setupDynamicBattleInfo(self, arenaTag, playerName, playerClan, accountDBID, battleMode, battleGameplay,
+  def setupDynamicBattleInfo(self, arenaTag, playerName, playerClan, playerClanDBID, accountDBID, battleMode, battleGameplay,
                              team, tankTag, tankType, tankRole, tankLevel,gunTag, allyTeamHealth, enemyTeamHealth,
                              allyTeamMaxHealth, enemyTeamMaxHealth, allyTeamFragsCount, enemyTeamFragsCount, mapsBlackList):
     self.arenaTag = arenaTag
     self.playerName = playerName
     self.playerClan = playerClan
+    self.playerClanDBID = playerClanDBID
     self.accountDBID = accountDBID
     self.battleMode = battleMode
     self.battleGameplay = battleGameplay

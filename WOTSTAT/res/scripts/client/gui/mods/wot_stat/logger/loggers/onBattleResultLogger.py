@@ -234,6 +234,8 @@ class OnBattleResultLogger:
           'name': player['realName'],
           'squadID': squadStorage[squadID] if squadID in squadStorage else 0,
           'bdid': bdid,
+          'clan': player['clanAbbrev'],
+          'clanDBID': player['clanDBID'],
           'team': player['team'],
           'playerRank': avatar['playerRank'],
           '__vehicleId': vehicleId
@@ -296,6 +298,7 @@ class OnBattleResultLogger:
       decodeResult['arenaID'] = arenaID
       decodeResult['currencies'] = currencies
       decodeResult['isPremium'] = personalRes.get('isPremium', False)
+      decodeResult['fortClanDBIDs'] = avatar.get('fortClanDBIDs', [])
       decodeResult['personalMissions'] = parsedPmQuests
       decodeResult['personalMissionsRaw'] = rawPmQuests
       setup_session_meta(battleEvent)
