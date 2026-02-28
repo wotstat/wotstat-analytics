@@ -15,16 +15,30 @@ from ..utils import setup_hangar_event
 from ...common.exceptionSending import with_exception_sending
 from constants import PREMIUM_TYPE
 
+try:
+  from renewable_subscription_common.settings_constants import WotPlusTier
+except ImportError:
+  class WotPlusTier:
+    NONE = 0
+    CORE = 1
+    PRO = 2
 
 import typing
 if typing.TYPE_CHECKING:
   from gui.shared.money import Money
 
+WOT_PLUS_TIER_NAMES = {
+  WotPlusTier.NONE: 'none',
+  WotPlusTier.CORE: 'core',
+  WotPlusTier.PRO: 'pro',
+  'CLASSIC': 'classic'
+}
+
 class AccountStatsLogger:
   
   itemsCache = dependency.descriptor(IItemsCache) # type: IItemsCache
   lobbyContext = dependency.descriptor(ILobbyContext) # type: ILobbyContext
-  wotPlusController = dependency.instance(IWotPlusController) # type: IWotPlusController
+  wotPlusController = dependency.descriptor(IWotPlusController) # type: IWotPlusController
   gameSession = dependency.descriptor(IGameSessionController) # type: IGameSessionController
 
 
@@ -43,6 +57,7 @@ class AccountStatsLogger:
     self.premiumPlusExpiryTime = None
 
     self.isWotPlus = False
+    self.wotPlusTier = None
     self.wotPlusExpiryTime = None
 
     self.telecom = ''
@@ -106,7 +121,14 @@ class AccountStatsLogger:
     self.premiumPlusExpiryTime = datetime.utcfromtimestamp(time).isoformat() if self.isPremiumPlus else None
 
   def updateWotPlus(self):
-    self.isWotPlus = self.wotPlusController.isEnabled()
+    if hasattr(self.wotPlusController, 'isEnabled'):
+      self.isWotPlus = self.wotPlusController.isEnabled()
+      self.wotPlusTier = WOT_PLUS_TIER_NAMES.get('CLASSIC' if self.isWotPlus else WotPlusTier.NONE)
+    elif hasattr(self.wotPlusController, 'hasSubscription'):
+      self.isWotPlus = self.wotPlusController.hasSubscription()
+      tier = self.wotPlusController.getTier()
+      self.wotPlusTier =  WOT_PLUS_TIER_NAMES.get(tier, str(tier))
+
     time = self.wotPlusController.getExpiryTime()
     self.wotPlusExpiryTime = datetime.utcfromtimestamp(time).isoformat() if self.isWotPlus else None
 
@@ -124,7 +146,7 @@ class AccountStatsLogger:
             self.freeXP == 0 and self.piggyBankCredits == 0 and self.piggyBankGold == 0 and
             self.premiumPlusExpiryTime is None and self.wotPlusExpiryTime is None and
             not self.isPremiumPlus and not self.isWotPlus and
-            self.telecom == '')
+            self.telecom == '' and self.wotPlusTier is None)
 
   def send(self):
     if self.isAllZero():
@@ -141,6 +163,7 @@ class AccountStatsLogger:
       'premiumPlusExpiryTime': self.premiumPlusExpiryTime,
       'isPremiumPlus': self.isPremiumPlus,
       'isWotPlus': self.isWotPlus,
+      'wotPlusTier': self.wotPlusTier,
       'wotPlusExpiryTime': self.wotPlusExpiryTime,
       'telecom': self.telecom,
       'piggyBankCredits': self.piggyBankCredits,
@@ -155,7 +178,7 @@ class AccountStatsLogger:
     event = OnAccountStats(
       self.credits, self.gold, self.crystal, self.equipCoin, self.bpCoin, self.eventCoin, self.freeXP,
       self.piggyBankCredits, self.piggyBankGold,
-      self.premiumPlusExpiryTime, self.isPremiumPlus, self.isWotPlus, self.wotPlusExpiryTime, self.telecom,
+      self.premiumPlusExpiryTime, self.isPremiumPlus, self.isWotPlus, self.wotPlusTier, self.wotPlusExpiryTime, self.telecom,
     )
     setup_hangar_event(event)
     eventLogger.emit_event(event)

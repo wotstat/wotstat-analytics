@@ -347,7 +347,7 @@ class OnComp7Info(HangarEvent):
 
 class OnAccountStats(HangarEvent):
   def __init__(self, credits, gold, crystal, equipCoin, bpCoin, eventCoin, freeXP, piggyBankCredits, piggyBankGold,
-               premiumPlusExpiryTime, isPremiumPlus, isWotPlus, wotPlusExpiryTime, telecom):
+               premiumPlusExpiryTime, isPremiumPlus, isWotPlus, wotPlusTier, wotPlusExpiryTime, telecom):
     HangarEvent.__init__(self, Event.NAMES.ON_ACCOUNT_STATS)
     self.credits = credits
     self.gold = gold
@@ -359,6 +359,7 @@ class OnAccountStats(HangarEvent):
     self.isPremiumPlus = isPremiumPlus
     self.premiumPlusExpiryTime = premiumPlusExpiryTime
     self.isWotPlus = isWotPlus
+    self.wotPlusTier = wotPlusTier
     self.wotPlusExpiryTime = wotPlusExpiryTime
     self.telecom = telecom
     self.piggyBankCredits = piggyBankCredits
