@@ -292,16 +292,10 @@ class OnShotLogger:
       
       acceleration = Math.Vector3(0.0, -gravity, 0.0)
     elif len(a) == 9:
-      attackerID, shotID, isRicochet, effectsIndex, refStartPoint, refVelocity, gravityOrAcceleration, maxShotDist, gunIndex = a
+      attackerID, shotID, isRicochet, effectsIndex, refStartPoint, refVelocity, acceleration, maxShotDist, gunIndex = a
       prefabEffIndex = shellTypeIdx = shellCaliber = None
       
-      # TODO: remove it after 1.28
-      if isinstance(gravityOrAcceleration, (int, float)):
-        gravity = gravityOrAcceleration
-        acceleration = Math.Vector3(0.0, -gravity, 0.0)
-      elif isinstance(gravityOrAcceleration, Math.Vector3):
-        acceleration = gravityOrAcceleration
-        gravity = -acceleration.y
+      gravity = -acceleration.y
         
     else:
       print_error('show_tracer: wrong args count. Got {} expected 12 or 9. Args: {}'.format(len(a), a))

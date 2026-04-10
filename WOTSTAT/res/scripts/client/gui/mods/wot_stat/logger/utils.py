@@ -16,7 +16,11 @@ from .providers.SystemInfoProvider import SystemInfoProvider
 
 from .events import DynamicBattleEvent, SessionMeta, ServerInfo, HangarEvent  # noqa: F401
 
-def vector(t): return {'x': t.x, 'y': t.y, 'z': t.z} if t else None
+def vector(t):
+  if t is None: return None
+
+  try: return {'x': t.x, 'y': t.y, 'z': t.z}
+  except: return None
 
 
 ARENA_TAGS = dict(
