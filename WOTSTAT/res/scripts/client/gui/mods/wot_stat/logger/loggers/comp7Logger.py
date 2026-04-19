@@ -6,8 +6,12 @@ from gui.ClientUpdateManager import g_clientUpdateManager
 from helpers import dependency
 from skeletons.gui.shared import IItemsCache
 from skeletons.gui.game_control import IComp7Controller
-from gui.game_control.comp7_controller import _LeaderboardDataProvider
 from Event import SafeEvent
+
+try:
+  from gui.game_control.comp7_controller import _LeaderboardDataProvider
+except ImportError:
+  from comp7.gui.game_control.comp7_controller import _LeaderboardDataProvider
 
 from ..eventLogger import eventLogger
 from ..events import OnComp7Info
