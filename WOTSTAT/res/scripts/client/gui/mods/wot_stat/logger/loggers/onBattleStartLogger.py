@@ -77,9 +77,6 @@ class OnBattleStartLogger:
     if period is ARENA_PERIOD.BATTLE and arena.bonusType in AWAIT_BATTLE_PERIOD_BEFORE_START:
       self.init_battle_session()
 
-    if period is ARENA_PERIOD.BATTLE:
-      eventLogger.start_battle_time = periodEndTime - periodLength
-      
   def init_battle_session(self):
     if not self.battle_loaded:
       return

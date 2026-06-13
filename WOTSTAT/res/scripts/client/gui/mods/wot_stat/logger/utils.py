@@ -4,6 +4,7 @@ import BigWorld
 from BattleFeedbackCommon import BATTLE_EVENT_TYPE
 from constants import ARENA_BONUS_TYPE, ARENA_GAMEPLAY_NAMES, ROLE_TYPE_TO_LABEL
 from gui.battle_control.battle_constants import FEEDBACK_EVENT_ID
+from items import vehicles as vehiclesWG
 from .sessionStorage import sessionStorage
 from ..common.exceptionSending import with_exception_sending
 from ..load_mod import config
@@ -60,6 +61,29 @@ def get_tank_role(role):
   return ROLE_TYPE_TO_LABEL.get(role, 'None')
 
 
+def get_comp7_skill_tag(skill_id):
+  if not skill_id:
+    return None
+
+  equipment = vehiclesWG.g_cache.getEquipmentByID(skill_id)
+  return equipment.name if equipment is not None else None
+
+
+def get_current_comp7_skill_info(player):
+  if player.arena.bonusType != ARENA_BONUS_TYPE.COMP7:
+    return None
+
+  vehicle = BigWorld.entities.get(player.playerVehicleID, None)
+  if vehicle is None or not hasattr(vehicle, 'selectedComp7Skill'):
+    return None
+
+  skill_id = vehicle.selectedComp7Skill
+  if not skill_id:
+    return None
+
+  return get_comp7_skill_tag(skill_id)
+
+
 @with_exception_sending
 def setup_server_info(serverInfo):
   # type: (ServerInfo) -> None
@@ -95,6 +119,7 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     tankRole=get_tank_role(player.vehicleTypeDescriptor.role),
     tankLevel=player.vehicleTypeDescriptor.level,
     gunTag=player.vehicleTypeDescriptor.gun.name,
+    comp7SkillTag=get_current_comp7_skill_info(player),
     allyTeamHealth=arenaInfoProvider.allyTeamHealth[0],
     enemyTeamHealth=arenaInfoProvider.enemyTeamHealth[0],
     allyTeamMaxHealth=arenaInfoProvider.allyTeamHealth[1],

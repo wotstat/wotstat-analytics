@@ -31,6 +31,7 @@ class WotHookEvents:
     self.Account_onBecomeNonPlayer = SendExceptionEvent()
     self.BattleQueue_populate = SendExceptionEvent()
     self.PlayerAvatar_onEnterWorld = SendExceptionEvent()
+    self.PlayerAvatar_onBecomeNonPlayer = SendExceptionEvent()
     self.PlayerAvatar_updateTargetingInfo = SendExceptionEvent()
     self.PlayerAvatar_onArenaPeriodChange = SendExceptionEvent()
     self.VehicleGunRotator_start = SendExceptionEvent()
@@ -107,6 +108,11 @@ except:
 @g_overrideLib.registerEvent(PlayerAvatar, 'onEnterWorld')
 def onEnterWorld(self, *a, **k):
   wotHookEvents.PlayerAvatar_onEnterWorld(self, *a, **k)
+
+
+@g_overrideLib.registerEvent(PlayerAvatar, 'onBecomeNonPlayer', prepend=True)
+def avatarBecomeNonPlayer(self, *a, **k):
+  wotHookEvents.PlayerAvatar_onBecomeNonPlayer(self, *a, **k)
 
 
 @g_overrideLib.registerEvent(PlayerAvatar, 'updateTargetingInfo')

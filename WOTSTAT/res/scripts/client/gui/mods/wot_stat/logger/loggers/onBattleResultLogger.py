@@ -5,7 +5,7 @@ import personal_missions
 from PlayerEvents import g_playerEvents
 from skeletons.gui.server_events import IEventsCache
 from items import vehicles as vehiclesWG
-from constants import FINISH_REASON, FINISH_REASON_NAMES
+from constants import ARENA_PERIOD, FINISH_REASON, FINISH_REASON_NAMES
 from helpers import dependency
 
 try: from potapov_quests import PQ_STATE as PM_STATE
@@ -14,7 +14,8 @@ except ImportError: from pm_quests import PM_STATE
 from ..eventLogger import eventLogger
 from ..events import OnBattleResult
 from ..sessionStorage import sessionStorage
-from ..utils import short_tank_type, get_tank_role, setup_dynamic_battle_info, setup_session_meta, setup_server_info
+from ..utils import short_tank_type, get_tank_role, get_comp7_skill_tag, setup_dynamic_battle_info, setup_session_meta, setup_server_info
+from ..wotHookEvents import wotHookEvents
 from ...common.exceptionSending import with_exception_sending
 from ...utils import print_debug, print_error
 
@@ -119,23 +120,53 @@ class OnBattleResultLogger:
   def __init__(self):
     self.arenas_id_wait_battle_result = []
     self.precreated_battle_result_event = dict()
+    self.comp7_skill_tags_by_arena = dict()
     self.battle_loaded = False
 
     g_playerEvents.onBattleResultsReceived += self.on_battle_results_received
     eventLogger.on_session_created += self.on_session_created
+    eventLogger.on_battle_started += self.on_battle_started
+    wotHookEvents.PlayerAvatar_onArenaPeriodChange += self.on_arena_period_change
+    wotHookEvents.PlayerAvatar_onBecomeNonPlayer += self.on_avatar_become_non_player
     self.battle_result_cache_checker()
 
   def on_session_created(self, battleEventSession):
-    self.arenas_id_wait_battle_result.append(battleEventSession.arenaID)
+    self.arenas_id_wait_battle_result.append(battleEventSession.arenaID)  
+
+  def on_battle_started(self, battleEventSession, arenaID=None):
+    self.create_battle_result_event(arenaID or battleEventSession.arenaID)
+
+  def create_battle_result_event(self, arenaID):
+    if arenaID in self.precreated_battle_result_event: return
+
     event = OnBattleResult()
     setup_dynamic_battle_info(event)
     setup_server_info(event)
-    self.precreated_battle_result_event[battleEventSession.arenaID] = event
+    self.precreated_battle_result_event[arenaID] = event
+
+  def on_arena_period_change(self, obj, period, *a, **k):
+    if period is ARENA_PERIOD.AFTERBATTLE:
+      self.update_comp7_skill_tags()
+
+  def on_avatar_become_non_player(self, obj, *a, **k):
+    self.update_comp7_skill_tags(obj.arenaUniqueID, obj)
+
+  def update_comp7_skill_tags(self, arenaID=None, player=None):
+    player = player or BigWorld.player()
+    if not hasattr(player, 'arena') or player.arena is None:
+      return
+
+    arenaID = arenaID or player.arenaUniqueID
+    skill_tags = self.comp7_skill_tags_by_arena.setdefault(arenaID, dict())
+    for vehicleID, vehicle in player.arena.vehicles.iteritems():
+      skill_tag = get_comp7_skill_tag(vehicle.get('selectedComp7Skill', 0))
+      if skill_tag:
+        skill_tags[vehicleID] = skill_tag
 
   @with_exception_sending
   def on_battle_results_received(self, isPlayerVehicle, results):
-    if not isPlayerVehicle or BattleReplay.isPlaying():
-      return
+    if not isPlayerVehicle or BattleReplay.isPlaying(): return
+    self.update_comp7_skill_tags(results.get('arenaUniqueID'))
     self.process_battle_result(results)
 
   @with_exception_sending
@@ -150,11 +181,9 @@ class OnBattleResultLogger:
       arenaID = self.arenas_id_wait_battle_result.pop(0)
       self.arenas_id_wait_battle_result.append(arenaID)
       try:
-        BigWorld.player().battleResultsCache.get(arenaID, lambda code, battleResults: result_callback(arenaID, code,
-                                                                                                      battleResults))
+        BigWorld.player().battleResultsCache.get(arenaID, lambda code, battleResults: result_callback(arenaID, code, battleResults))
       except:
         pass
-
 
   def process_battle_result(self, results):
     arenaID = results.get('arenaUniqueID')
@@ -164,7 +193,12 @@ class OnBattleResultLogger:
       return
 
     self.arenas_id_wait_battle_result.remove(arenaID)
-    battleEvent = self.precreated_battle_result_event.pop(arenaID)  # type: OnBattleResult
+    battleEvent = self.precreated_battle_result_event.pop(arenaID, None)  # type: OnBattleResult
+    comp7_skill_tags = self.comp7_skill_tags_by_arena.pop(arenaID, dict()) # type: dict
+
+    if battleEvent is None:
+      print_error('missing precreated battle result event for {}'.format(arenaID))
+      return
 
     decodeResult = {}
     try:
@@ -173,9 +207,10 @@ class OnBattleResultLogger:
       winnerTeamIsMy = playerTeam == winnerTeam
       teamHealth = [results['common']['teamHealth'][1], results['common']['teamHealth'][2]]
 
-      players = results['players']
-      avatars = results['avatars']
-      vehicles = results['vehicles']
+      players = results['players'] # type: dict
+      avatars = results['avatars'] # type: dict
+      vehicles = results['vehicles'] # type: dict
+      personalAvatar = results['personal']['avatar'] # type: dict
       playersResultList = list()
 
       squadStorage = dict()
@@ -185,7 +220,6 @@ class OnBattleResultLogger:
         if squadID != 0 and squadID not in squadStorage:
           squadCount += 1
           squadStorage[squadID] = squadCount
-
 
       def getVehicleInfo(vehicle):
         veWG = vehiclesWG.getVehicleType(vehicle['typeCompDescr'])
@@ -224,11 +258,12 @@ class OnBattleResultLogger:
 
       for vehicleId in vehicles:
         vehicle = vehicles[vehicleId][0]
-        bdid = vehicle['accountDBID']
+        bdid = vehicle.get('accountDBID', None)
+        if bdid is None: continue
         if bdid not in players: continue
         if bdid not in avatars: continue
         player = players[bdid]
-        avatar = avatars[bdid]
+        vehAvatar = avatars[bdid]
         squadID = player['prebattleID']
         res = {
           'name': player['realName'],
@@ -237,7 +272,8 @@ class OnBattleResultLogger:
           'clan': player['clanAbbrev'],
           'clanDBID': player['clanDBID'],
           'team': player['team'],
-          'playerRank': avatar['playerRank'],
+          'playerRank': vehAvatar['playerRank'],
+          'comp7SkillTag': comp7_skill_tags.get(vehicleId, None),
           '__vehicleId': vehicleId
         }
         res.update(getVehicleInfo(vehicle))
@@ -254,33 +290,33 @@ class OnBattleResultLogger:
         killerId = vehicles[resultID][0]['killerID']
         result['killerIndex'] = indexById[killerId] if killerId in indexById else -1
 
-      avatar = results['personal']['avatar']
-      personalRes = results['personal'].items()[0][1]
-      killerId = personalRes['killerID']
-      squadID = players[avatar['accountDBID']]['prebattleID']
+      personalVehicle = results['personal'].items()[0][1]
+      killerId = personalVehicle['killerID']
+      squadID = players[personalAvatar['accountDBID']]['prebattleID']
       personal = {
-        'team': avatar['team'],
+        'team': personalAvatar['team'],
         'killerIndex': indexById[killerId] if killerId in indexById else -1,
         'squadID': squadStorage[squadID] if squadID in squadStorage else 0,
-        'playerRank': avatar['playerRank'],
+        'playerRank': personalAvatar['playerRank'],
+        'comp7SkillTag': battleEvent.comp7SkillTag,
       }
-      personal.update(getVehicleInfo(personalRes))
-      personal.update({'xp': personalRes['originalXP']})
+      personal.update(getVehicleInfo(personalVehicle))
+      personal.update({'xp': personalVehicle['originalXP']})
       
       comp7 = {
-        'ratingDelta': avatar.get('comp7RatingDelta', 0),
-        'rating': avatar.get('comp7Rating', 0) + avatar.get('comp7RatingDelta', 0),
-        'qualBattleIndex': avatar.get('comp7QualBattleIndex', 0),
-        'qualActive': avatar.get('comp7QualActive', False),
+        'ratingDelta': personalAvatar.get('comp7RatingDelta', 0),
+        'rating': personalAvatar.get('comp7Rating', 0) + personalAvatar.get('comp7RatingDelta', 0),
+        'qualBattleIndex': personalAvatar.get('comp7QualBattleIndex', 0),
+        'qualActive': personalAvatar.get('comp7QualActive', False),
       }
       
-      currencies = parseCurrencies(personalRes)
+      currencies = parseCurrencies(personalVehicle)
 
-      try: parsedPmQuests = parsePersonalMissions(avatar)
+      try: parsedPmQuests = parsePersonalMissions(personalAvatar)
       except: parsedPmQuests = []
 
       try:
-        progress = avatar.get('PMProgress', {})
+        progress = personalAvatar.get('PMProgress', {})
         rawPmQuests = json.dumps(progress)
       except: rawPmQuests = ''
       
@@ -297,8 +333,8 @@ class OnBattleResultLogger:
       decodeResult['winnerTeam'] = winnerTeam
       decodeResult['arenaID'] = arenaID
       decodeResult['currencies'] = currencies
-      decodeResult['isPremium'] = personalRes.get('isPremium', False)
-      decodeResult['fortClanDBIDs'] = avatar.get('fortClanDBIDs', [])
+      decodeResult['isPremium'] = personalVehicle.get('isPremium', False)
+      decodeResult['fortClanDBIDs'] = personalAvatar.get('fortClanDBIDs', [])
       decodeResult['personalMissions'] = parsedPmQuests
       decodeResult['personalMissionsRaw'] = rawPmQuests
       setup_session_meta(battleEvent)
@@ -307,7 +343,7 @@ class OnBattleResultLogger:
 
       sessionStorage.on_result_battle(result=battle_result,
                                       player_team=playerTeam,
-                                      player_bdid=avatar['accountDBID'],
+                                      player_bdid=personalAvatar['accountDBID'],
                                       players_results=playersResultList)
 
     except Exception as e:
