@@ -180,9 +180,10 @@ class OnBattleResultLogger:
     self.arenas_id_wait_battle_result.append(battleEventSession.arenaID)  
 
   def on_battle_started(self, battleEventSession, arenaID=None):
-    self.create_battle_result_event(arenaID or battleEventSession.arenaID)
+    BigWorld.callback(1, lambda: self.create_battle_result_event(arenaID or battleEventSession.arenaID))
 
   def create_battle_result_event(self, arenaID):
+    print_debug("Creating battle result event for arenaID: {}".format(arenaID))
     if arenaID in self.precreated_battle_result_event: return
 
     event = OnBattleResult()

@@ -166,7 +166,6 @@ def get_shells_from_battle_controller():
   except:
     return None
 
-
 def get_shells_from_prebattle_setup():
   try:
     sessionProvider = dependency.instance(IBattleSessionProvider)
@@ -185,13 +184,11 @@ def get_shells_from_prebattle_setup():
   except:
     return None
 
-
 def get_current_shells_info():
   shells = get_shells_from_battle_controller()
   if shells is not None: return shells
 
   return get_shells_from_prebattle_setup()
-
 
 def get_current_battle_booster_info(player):
   try:
