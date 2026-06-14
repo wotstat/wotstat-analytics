@@ -70,7 +70,6 @@ def get_comp7_skill_tag(skill_id):
   equipment = vehiclesWG.g_cache.getEquipmentByID(skill_id)
   return equipment.name if equipment is not None else None
 
-
 def get_current_comp7_skill_info(player):
   if player.arena.bonusType != ARENA_BONUS_TYPE.COMP7:
     return None
@@ -85,7 +84,6 @@ def get_current_comp7_skill_info(player):
 
   return get_comp7_skill_tag(skill_id)
 
-
 def get_current_equipment_info(player):
   try:
     vehicleType = player.arena.vehicles[player.playerVehicleID].get('vehicleType', None)
@@ -95,13 +93,11 @@ def get_current_equipment_info(player):
   except:
     return None
 
-
 def get_current_own_vehicle(player):
   vehicle = BigWorld.entities.get(player.playerVehicleID, None)
   if vehicle is None: return None
 
   return vehicle.dynamicComponents.get('ownVehicle')
-
 
 def get_consumables_from_battle_controller():
   try:
@@ -131,7 +127,6 @@ def get_consumables_from_battle_controller():
   except:
     return None
 
-
 def get_consumables_from_prebattle_setup():
   try:
     sessionProvider = dependency.instance(IBattleSessionProvider)
@@ -151,7 +146,6 @@ def get_current_consumables_info():
   if consumables is not None: return consumables
 
   return get_consumables_from_prebattle_setup()
-
 
 def get_shells_from_battle_controller():
   try:
