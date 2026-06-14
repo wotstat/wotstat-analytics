@@ -147,6 +147,52 @@ def get_current_consumables_info():
   return get_consumables_from_prebattle_setup()
 
 
+def get_shells_from_battle_controller():
+  try:
+    sessionProvider = dependency.instance(IBattleSessionProvider)
+    ammoCtrl = sessionProvider.shared.ammo
+    if ammoCtrl is None: return None
+
+    layout = ammoCtrl.getOrderedShellsLayout()
+    if not layout: return None
+
+    result = {}
+    for shellInfo in layout:
+      descriptor = shellInfo[1]
+      quantity = shellInfo[2]
+      result[descriptor.kind] = result.get(descriptor.kind, 0) + quantity
+
+    return result
+  except:
+    return None
+
+
+def get_shells_from_prebattle_setup():
+  try:
+    sessionProvider = dependency.instance(IBattleSessionProvider)
+    prebattleSetups = sessionProvider.shared.prebattleSetups
+    if prebattleSetups is None: return None
+    if prebattleSetups.isSelectionEnded(): return None
+
+    vehicle = get_private_attr(prebattleSetups, '__vehicle')
+    if vehicle is None: return None
+
+    result = {}
+    for shell in vehicle.shells.installed.getItems():
+      result[shell.descriptor.kind] = result.get(shell.descriptor.kind, 0) + shell.count
+
+    return result
+  except:
+    return None
+
+
+def get_current_shells_info():
+  shells = get_shells_from_battle_controller()
+  if shells is not None: return shells
+
+  return get_shells_from_prebattle_setup()
+
+
 def get_current_battle_booster_info(player):
   try:
     ownVehicle = get_current_own_vehicle(player)
@@ -207,7 +253,8 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     mapsBlackList=accountStatsProvider.mapBlackList,
     equipment=get_current_equipment_info(player),
     consumables=get_current_consumables_info(),
-    battleBooster=get_current_battle_booster_info(player)
+    battleBooster=get_current_battle_booster_info(player),
+    shells=get_current_shells_info()
   )
   
   dynamicBattleEvent.setupSystemInfo(systemInfoProvider.getSystemInfo())
