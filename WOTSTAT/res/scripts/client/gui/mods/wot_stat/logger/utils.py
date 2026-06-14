@@ -10,6 +10,7 @@ from skeletons.gui.battle_session import IBattleSessionProvider
 from .sessionStorage import sessionStorage
 from ..common.exceptionSending import with_exception_sending
 from ..load_mod import config
+from ..utils import print_error
 from .extra.ExtraCollector import ExtraCollector
 
 from .providers.ArenaInfoProvider import ArenaInfoProvider
@@ -90,7 +91,8 @@ def get_current_equipment_info(player):
     if vehicleType is None: return None
 
     return [device.name if device is not None else None for device in vehicleType.optionalDevices]
-  except:
+  except Exception as e:
+    print_error("Error while getting current equipment info: {}".format(str(e)))
     return None
 
 def get_current_own_vehicle(player):
@@ -124,7 +126,8 @@ def get_consumables_from_battle_controller():
     if len(result) < equipmentCount: return None
 
     return result
-  except:
+  except Exception as e:
+    print_error("Error while getting current consumables info: {}".format(str(e)))
     return None
 
 def get_consumables_from_prebattle_setup():
@@ -138,7 +141,8 @@ def get_consumables_from_prebattle_setup():
     if vehicle is None: return None
 
     return [item.name if item is not None else None for item in vehicle.consumables.installed]
-  except:
+  except Exception as e:
+    print_error("Error while getting prebattle consumables info: {}".format(str(e)))
     return None
 
 def get_current_consumables_info():
@@ -163,7 +167,8 @@ def get_shells_from_battle_controller():
       result[descriptor.kind] = result.get(descriptor.kind, 0) + quantity
 
     return result
-  except:
+  except Exception as e:
+    print_error("Error while getting current shells info: {}".format(str(e)))
     return None
 
 def get_shells_from_prebattle_setup():
@@ -181,7 +186,8 @@ def get_shells_from_prebattle_setup():
       result[shell.descriptor.kind] = result.get(shell.descriptor.kind, 0) + shell.count
 
     return result
-  except:
+  except Exception as e:
+    print_error("Error while getting prebattle shells info: {}".format(str(e)))
     return None
 
 def get_current_shells_info():
@@ -201,7 +207,8 @@ def get_current_battle_booster_info(player):
         return descriptor.name
 
     return None
-  except:
+  except Exception as e:
+    print_error("Error while getting current battle booster info: {}".format(str(e)))
     return None
 
 
