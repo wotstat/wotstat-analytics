@@ -105,20 +105,27 @@ def get_current_own_vehicle(player):
 
 def get_consumables_from_battle_controller():
   try:
-    sessionProvider = dependency.instance(IBattleSessionProvider)
+    sessionProvider = dependency.instance(IBattleSessionProvider) # type: IBattleSessionProvider
     equipmentsCtrl = sessionProvider.shared.equipments
     if equipmentsCtrl is None: return None
 
     order = getattr(equipmentsCtrl, '_order', None)
     equipments = getattr(equipmentsCtrl, '_equipments', None)
-    equipmentCount = get_private_attr(equipmentsCtrl, '__equipmentCount')
+    equipmentCount = getattr(equipmentsCtrl, '_EquipmentsController__equipmentCount', None)
+
     if order is None or equipments is None or equipmentCount is None or len(order) < equipmentCount:
       return None
 
     result = []
     for intCD in order:
+      if len(result) >= equipmentCount: break
       if not intCD: result.append(None)
-      else: result.append(equipments[intCD].getDescriptor().name)
+      else:
+        descriptor = equipments[intCD].getDescriptor()
+        if descriptor.equipmentType == EQUIPMENT_TYPES.regular:
+          result.append(descriptor.name)
+
+    if len(result) < equipmentCount: return None
 
     return result
   except:
@@ -138,7 +145,6 @@ def get_consumables_from_prebattle_setup():
     return [item.name if item is not None else None for item in vehicle.consumables.installed]
   except:
     return None
-
 
 def get_current_consumables_info():
   consumables = get_consumables_from_battle_controller()
@@ -243,7 +249,7 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     tankRole=get_tank_role(player.vehicleTypeDescriptor.role),
     tankLevel=player.vehicleTypeDescriptor.level,
     gunTag=player.vehicleTypeDescriptor.gun.name,
-    comp7SkillTag=get_current_comp7_skill_info(player),
+    comp7SkillTag=get_current_comp7_skill_info(player) or '',
     allyTeamHealth=arenaInfoProvider.allyTeamHealth[0],
     enemyTeamHealth=arenaInfoProvider.enemyTeamHealth[0],
     allyTeamMaxHealth=arenaInfoProvider.allyTeamHealth[1],
@@ -251,10 +257,10 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     allyTeamFragsCount=arenaInfoProvider.allyTeamFragsCount,
     enemyTeamFragsCount=arenaInfoProvider.enemyTeamFragsCount,
     mapsBlackList=accountStatsProvider.mapBlackList,
-    equipment=get_current_equipment_info(player),
-    consumables=get_current_consumables_info(),
-    battleBooster=get_current_battle_booster_info(player),
-    shells=get_current_shells_info()
+    equipment=get_current_equipment_info(player) or [],
+    consumables=get_current_consumables_info() or [],
+    battleBooster=get_current_battle_booster_info(player) or '',
+    shells=get_current_shells_info() or {}
   )
   
   dynamicBattleEvent.setupSystemInfo(systemInfoProvider.getSystemInfo())
