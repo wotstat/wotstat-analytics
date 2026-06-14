@@ -53,7 +53,7 @@ class EventLogger:
       return
 
     self.battle_started_arena_ids[arenaID] = True
-    self.on_battle_started(self.battle_event_session, arenaID)
+    BigWorld.callback(0, lambda: self.on_battle_started(self.battle_event_session, arenaID))
 
   def emit_event(self, event, arena_id=None):
     if event.eventName == Event.NAMES.ON_BATTLE_START:

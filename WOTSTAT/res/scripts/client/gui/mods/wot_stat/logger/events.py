@@ -124,10 +124,14 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.allyTeamFragsCount = None
     self.enemyTeamFragsCount = None
     self.mapsBlackList = None
+    self.equipment = None
+    self.consumables = None
+    self.battleBooster = None
 
   def setupDynamicBattleInfo(self, arenaTag, playerName, playerClan, playerClanDBID, accountDBID, battleMode, battleGameplay,
                              team, tankTag, tankType, tankRole, tankLevel, gunTag, comp7SkillTag, allyTeamHealth, enemyTeamHealth,
-                             allyTeamMaxHealth, enemyTeamMaxHealth, allyTeamFragsCount, enemyTeamFragsCount, mapsBlackList):
+                             allyTeamMaxHealth, enemyTeamMaxHealth, allyTeamFragsCount, enemyTeamFragsCount, mapsBlackList,
+                             equipment, consumables, battleBooster):
     self.arenaTag = arenaTag
     self.playerName = playerName
     self.playerClan = playerClan
@@ -149,6 +153,9 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.allyTeamFragsCount = allyTeamFragsCount
     self.enemyTeamFragsCount = enemyTeamFragsCount
     self.mapsBlackList = mapsBlackList
+    self.equipment = equipment
+    self.consumables = consumables
+    self.battleBooster = battleBooster
 
   def setupSystemInfo(self, info):
     self.systemInfo = info

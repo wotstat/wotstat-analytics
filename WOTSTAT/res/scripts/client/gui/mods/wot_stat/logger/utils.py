@@ -4,7 +4,9 @@ import BigWorld
 from BattleFeedbackCommon import BATTLE_EVENT_TYPE
 from constants import ARENA_BONUS_TYPE, ARENA_GAMEPLAY_NAMES, ROLE_TYPE_TO_LABEL
 from gui.battle_control.battle_constants import FEEDBACK_EVENT_ID
-from items import vehicles as vehiclesWG
+from helpers import dependency
+from items import vehicles as vehiclesWG, EQUIPMENT_TYPES
+from skeletons.gui.battle_session import IBattleSessionProvider
 from .sessionStorage import sessionStorage
 from ..common.exceptionSending import with_exception_sending
 from ..load_mod import config
@@ -84,6 +86,82 @@ def get_current_comp7_skill_info(player):
   return get_comp7_skill_tag(skill_id)
 
 
+def get_current_equipment_info(player):
+  try:
+    vehicleType = player.arena.vehicles[player.playerVehicleID].get('vehicleType', None)
+    if vehicleType is None: return None
+
+    return [device.name if device is not None else None for device in vehicleType.optionalDevices]
+  except:
+    return None
+
+
+def get_current_own_vehicle(player):
+  vehicle = BigWorld.entities.get(player.playerVehicleID, None)
+  if vehicle is None: return None
+
+  return vehicle.dynamicComponents.get('ownVehicle')
+
+
+def get_consumables_from_battle_controller():
+  try:
+    sessionProvider = dependency.instance(IBattleSessionProvider)
+    equipmentsCtrl = sessionProvider.shared.equipments
+    if equipmentsCtrl is None: return None
+
+    order = getattr(equipmentsCtrl, '_order', None)
+    equipments = getattr(equipmentsCtrl, '_equipments', None)
+    equipmentCount = get_private_attr(equipmentsCtrl, '__equipmentCount')
+    if order is None or equipments is None or equipmentCount is None or len(order) < equipmentCount:
+      return None
+
+    result = []
+    for intCD in order:
+      if not intCD: result.append(None)
+      else: result.append(equipments[intCD].getDescriptor().name)
+
+    return result
+  except:
+    return None
+
+
+def get_consumables_from_prebattle_setup():
+  try:
+    sessionProvider = dependency.instance(IBattleSessionProvider)
+    prebattleSetups = sessionProvider.shared.prebattleSetups
+    if prebattleSetups is None: return None
+    if prebattleSetups.isSelectionEnded(): return None
+
+    vehicle = get_private_attr(prebattleSetups, '__vehicle')
+    if vehicle is None: return None
+
+    return [item.name if item is not None else None for item in vehicle.consumables.installed]
+  except:
+    return None
+
+
+def get_current_consumables_info():
+  consumables = get_consumables_from_battle_controller()
+  if consumables is not None: return consumables
+
+  return get_consumables_from_prebattle_setup()
+
+
+def get_current_battle_booster_info(player):
+  try:
+    ownVehicle = get_current_own_vehicle(player)
+    if ownVehicle is None: return None
+
+    for equipment in ownVehicle.equipment:
+      descriptor = vehiclesWG.getItemByCompactDescr(equipment.compactDescr)
+      if descriptor.equipmentType == EQUIPMENT_TYPES.battleBoosters:
+        return descriptor.name
+
+    return None
+  except:
+    return None
+
+
 @with_exception_sending
 def setup_server_info(serverInfo):
   # type: (ServerInfo) -> None
@@ -126,8 +204,12 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     enemyTeamMaxHealth=arenaInfoProvider.enemyTeamHealth[1],
     allyTeamFragsCount=arenaInfoProvider.allyTeamFragsCount,
     enemyTeamFragsCount=arenaInfoProvider.enemyTeamFragsCount,
-    mapsBlackList=accountStatsProvider.mapBlackList
+    mapsBlackList=accountStatsProvider.mapBlackList,
+    equipment=get_current_equipment_info(player),
+    consumables=get_current_consumables_info(),
+    battleBooster=get_current_battle_booster_info(player)
   )
+  
   dynamicBattleEvent.setupSystemInfo(systemInfoProvider.getSystemInfo())
   dynamicBattleEvent.setupExtra(ExtraCollector.instance().getExtraData())
 
