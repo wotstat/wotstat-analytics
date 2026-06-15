@@ -232,10 +232,11 @@ def get_current_crew_info(player):
     result = []
     for compactDescr, roles in zip(crewCompactDescrs, crewRoles):
       descriptor = tankmen.TankmanDescr(compactDescr, battleOnly=True) # type: tankmen.TankmanDescr
+      actualRoleLevel = round(descriptor.roleLevel * descriptor.efficiencyOnVehicle(vehicle.typeDescriptor))
       result.append({
         'roles': list(roles),
-        'roleLevel': descriptor.roleLevel,
-        'perks': [{'tag': tag, 'level': level} for tag, level in descriptor.skillLevels]
+        'level': actualRoleLevel,
+        'skills': [{'tag': tag, 'level': level} for tag, level in descriptor.skillLevels]
       })
 
     return result
@@ -294,8 +295,6 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     crew=get_current_crew_info(player) or []
   )
 
-  print("Dynamic battle info setup", dynamicBattleEvent.crew)
-  
   dynamicBattleEvent.setupSystemInfo(systemInfoProvider.getSystemInfo())
   dynamicBattleEvent.setupExtra(ExtraCollector.instance().getExtraData())
 
