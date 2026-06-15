@@ -215,6 +215,26 @@ def get_current_battle_booster_info(player):
     print_error("Error while getting current battle booster info: {}".format(str(e)))
     return None
 
+def get_tankman_actual_level(descriptor, vehicle):
+  if hasattr(descriptor, 'efficiencyOnVehicle'):
+    return int(round(descriptor.roleLevel * descriptor.efficiencyOnVehicle(vehicle.typeDescriptor)))
+
+  if hasattr(descriptor, 'skillsEfficiency'):
+    vehicleType = vehicle.typeDescriptor.type
+    if hasattr(descriptor, 'isOwnVehicleOrPremium') and not descriptor.isOwnVehicleOrPremium(vehicleType):
+      return 0
+
+    return int(round(descriptor.skillsEfficiency * tankmen.MAX_SKILL_LEVEL))
+
+  return descriptor.roleLevel
+
+def get_tankman_skills_info(descriptor, roles):
+  skillLevels = getattr(descriptor, 'skillLevels', None)
+  if callable(skillLevels):
+    return [{'tag': tag, 'level': level} for tag, level in skillLevels(roles)]
+
+  return [{'tag': tag, 'level': level} for tag, level in skillLevels]
+
 def get_current_crew_info(player):
   # type: (PlayerAvatar) -> list[dict] | None
   try:
@@ -232,11 +252,10 @@ def get_current_crew_info(player):
     result = []
     for compactDescr, roles in zip(crewCompactDescrs, crewRoles):
       descriptor = tankmen.TankmanDescr(compactDescr, battleOnly=True) # type: tankmen.TankmanDescr
-      actualRoleLevel = round(descriptor.roleLevel * descriptor.efficiencyOnVehicle(vehicle.typeDescriptor))
       result.append({
         'roles': list(roles),
-        'level': actualRoleLevel,
-        'skills': [{'tag': tag, 'level': level} for tag, level in descriptor.skillLevels]
+        'level': get_tankman_actual_level(descriptor, vehicle),
+        'skills': get_tankman_skills_info(descriptor, roles)
       })
 
     return result
