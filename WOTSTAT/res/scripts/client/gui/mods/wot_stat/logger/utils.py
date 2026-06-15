@@ -5,7 +5,7 @@ from BattleFeedbackCommon import BATTLE_EVENT_TYPE
 from constants import ARENA_BONUS_TYPE, ARENA_GAMEPLAY_NAMES, ROLE_TYPE_TO_LABEL
 from gui.battle_control.battle_constants import FEEDBACK_EVENT_ID
 from helpers import dependency
-from items import vehicles as vehiclesWG, EQUIPMENT_TYPES
+from items import vehicles as vehiclesWG, EQUIPMENT_TYPES, tankmen
 from skeletons.gui.battle_session import IBattleSessionProvider
 from .sessionStorage import sessionStorage
 from ..common.exceptionSending import with_exception_sending
@@ -19,6 +19,10 @@ from .providers.ServerOnlineProvider import ServerOnlineProvider
 from .providers.SystemInfoProvider import SystemInfoProvider
 
 from .events import DynamicBattleEvent, SessionMeta, ServerInfo, HangarEvent  # noqa: F401
+
+import typing
+if typing.TYPE_CHECKING:
+  from Avatar import PlayerAvatar
 
 def vector(t):
   if t is None: return None
@@ -211,6 +215,34 @@ def get_current_battle_booster_info(player):
     print_error("Error while getting current battle booster info: {}".format(str(e)))
     return None
 
+def get_current_crew_info(player):
+  # type: (PlayerAvatar) -> list[dict] | None
+  try:
+    sessionProvider = dependency.instance(IBattleSessionProvider)
+    vehicleState = sessionProvider.shared.vehicleState
+    if vehicleState is None: return None
+
+    vehicle = vehicleState.getControllingVehicle()
+    if vehicle is None or vehicle.id != player.playerVehicleID: return None
+
+    crewCompactDescrs = getattr(vehicle, 'crewCompactDescrs', None)
+    if crewCompactDescrs is None: return None
+
+    crewRoles = vehicle.typeDescriptor.type.crewRoles
+    result = []
+    for compactDescr, roles in zip(crewCompactDescrs, crewRoles):
+      descriptor = tankmen.TankmanDescr(compactDescr, battleOnly=True) # type: tankmen.TankmanDescr
+      result.append({
+        'roles': list(roles),
+        'roleLevel': descriptor.roleLevel,
+        'perks': [{'tag': tag, 'level': level} for tag, level in descriptor.skillLevels]
+      })
+
+    return result
+  except Exception as e:
+    print_error("Error while getting current crew info: {}".format(str(e)))
+    return None
+
 
 @with_exception_sending
 def setup_server_info(serverInfo):
@@ -242,7 +274,7 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     battleMode=ARENA_TAGS[player.arena.bonusType],
     battleGameplay=ARENA_GAMEPLAY_NAMES[player.arenaTypeID >> 16],
     team=player.team,
-    tankTag=BigWorld.entities[BigWorld.player().playerVehicleID].typeDescriptor.name,
+    tankTag=BigWorld.entities[player.playerVehicleID].typeDescriptor.name,
     tankType=short_tank_type(get_tank_type(player.vehicleTypeDescriptor.type.tags)),
     tankRole=get_tank_role(player.vehicleTypeDescriptor.role),
     tankLevel=player.vehicleTypeDescriptor.level,
@@ -258,8 +290,11 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
     equipment=get_current_equipment_info(player) or [],
     consumables=get_current_consumables_info() or [],
     battleBooster=get_current_battle_booster_info(player) or '',
-    shells=get_current_shells_info() or {}
+    shells=get_current_shells_info() or {},
+    crew=get_current_crew_info(player) or []
   )
+
+  print("Dynamic battle info setup", dynamicBattleEvent.crew)
   
   dynamicBattleEvent.setupSystemInfo(systemInfoProvider.getSystemInfo())
   dynamicBattleEvent.setupExtra(ExtraCollector.instance().getExtraData())
