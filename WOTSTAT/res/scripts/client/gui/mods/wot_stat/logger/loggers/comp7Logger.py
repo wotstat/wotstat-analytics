@@ -16,6 +16,7 @@ except ImportError:
 from ..eventLogger import eventLogger
 from ..events import OnComp7Info
 from ..utils import setup_hangar_event
+from ...utils import print_warn
 from ...common.exceptionSending import with_exception_sending
 
 onOwnDataGet = SafeEvent()
@@ -94,36 +95,56 @@ class Comp7Logger:
     if self._leaderboardPosition == result.position: return
 
     BigWorld.callback(0, self.onChanged)
+  
+  @with_exception_sending
+  @adisp.adisp_async
+  @adisp.adisp_process
+  def updateLeaderboard(self, callback):
+    leaderboard = self.comp7Controller.leaderboard # type: _LeaderboardDataProvider
+
+    eliteTrashload = None
+    leaderboardPosition = None
+
+    self._leaderboardLoading = True
+    eliteTrashload, status = yield leaderboard.getLastEliteRating()
+    ownData = yield leaderboard.getOwnData() # type: _LeaderboardDataProvider._OwnData
+    self._leaderboardLoading = False
+
+    if not status:
+      print_warn("Failed to get elite trashload from leaderboard")
+      eliteTrashload = None
+
+    leaderboardPosition = ownData.position if ownData and ownData.isSuccess else None
+
+    if self._lastEliteTrashload == eliteTrashload and self._leaderboardPosition == leaderboardPosition:
+      callback(False)
+      return
+
+    self._lastEliteTrashload = eliteTrashload
+    self._leaderboardPosition = leaderboardPosition
+
+    callback(True)
+    return
+
+  @with_exception_sending
+  def updateRating(self):
+    currentRating = self.getCurrentRating()
+    if self._lastRating == currentRating: return False
+    self._lastRating = currentRating
+    return True
 
   @adisp.adisp_process
   def onChanged(self):
     season = self.getSeasonName()
     if season is None: return
 
-    leaderboard = self.comp7Controller.leaderboard # type: _LeaderboardDataProvider
+    leaderboardChanged = yield self.updateLeaderboard()
+    ratingChanged = self.updateRating()
 
-    self._leaderboardLoading = True
-    eliteTrashload, status = yield leaderboard.getLastEliteRating()
-    self._leaderboardLoading = False
-    if not status: return
-
-    self._leaderboardLoading = True
-    ownData = yield leaderboard.getOwnData() # type: _LeaderboardDataProvider._OwnData
-    self._leaderboardLoading = False
-    if ownData is None: return
-    leaderboardPosition = ownData.position if ownData.isSuccess else None
-
-    currentRating = self.getCurrentRating()
-    if currentRating is None: return
-
-    if self._lastEliteTrashload == eliteTrashload and self._lastRating == currentRating and self._leaderboardPosition == leaderboardPosition:
+    if not leaderboardChanged and not ratingChanged:
       return
-    
-    self._lastEliteTrashload = eliteTrashload
-    self._lastRating = currentRating
-    self._leaderboardPosition = leaderboardPosition
-
-    event = OnComp7Info(season, currentRating, eliteTrashload, leaderboardPosition)
+  
+    event = OnComp7Info(season, self._lastRating, self._lastEliteTrashload, self._leaderboardPosition)
     setup_hangar_event(event)
     eventLogger.emit_event(event)
 
