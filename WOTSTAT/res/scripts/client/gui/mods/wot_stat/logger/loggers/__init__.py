@@ -2,6 +2,7 @@ import BigWorld
 
 from debug_utils import LOG_CURRENT_EXCEPTION
 from ...common.exceptionSending import send_current_exception    
+from ...utils import print_error
 
 # from ribbonsLogger import onRibbonsLogger
 # from onShotReceiveLogger import onShotReceiveLogger
@@ -19,6 +20,7 @@ loggers = [
 pkg = __name__
 for name in loggers:
   try: __import__(pkg + '.' + name, globals(), locals(), [name], -1)
-  except Exception: 
+  except Exception:
+    print_error("Error while importing logger: {}".format(name))
     send_current_exception()
     LOG_CURRENT_EXCEPTION()

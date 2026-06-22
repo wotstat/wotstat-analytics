@@ -1,5 +1,7 @@
 import BigWorld
 import adisp
+from BWUtil import AsyncReturn
+from debug_utils import LOG_CURRENT_EXCEPTION
 
 from gui.shared.personality import ServicesLocator
 from gui.ClientUpdateManager import g_clientUpdateManager
@@ -7,6 +9,11 @@ from helpers import dependency
 from skeletons.gui.shared import IItemsCache
 from skeletons.gui.game_control import IComp7Controller
 from Event import SafeEvent
+
+try:
+  from th_async import th_async as wg_async, await_callback, TimeoutError, BrokenPromiseError
+except ImportError:
+  from wg_async import wg_async, await_callback, TimeoutError, BrokenPromiseError
 
 try:
   from gui.game_control.comp7_controller import _LeaderboardDataProvider
@@ -17,7 +24,9 @@ from ..eventLogger import eventLogger
 from ..events import OnComp7Info
 from ..utils import setup_hangar_event
 from ...utils import print_warn
-from ...common.exceptionSending import with_exception_sending
+from ...common.exceptionSending import with_exception_sending, send_current_exception
+
+LEADERBOARD_REQUEST_TIMEOUT = 10.0
 
 onOwnDataGet = SafeEvent()
 getOwnData_old = _LeaderboardDataProvider.getOwnData
@@ -96,35 +105,44 @@ class Comp7Logger:
 
     BigWorld.callback(0, self.onChanged)
   
-  @with_exception_sending
-  @adisp.adisp_async
-  @adisp.adisp_process
-  def updateLeaderboard(self, callback):
+  @wg_async
+  def updateLeaderboard(self):
     leaderboard = self.comp7Controller.leaderboard # type: _LeaderboardDataProvider
 
     eliteTrashload = None
     leaderboardPosition = None
 
     self._leaderboardLoading = True
-    eliteTrashload, status = yield leaderboard.getLastEliteRating()
-    ownData = yield leaderboard.getOwnData() # type: _LeaderboardDataProvider._OwnData
-    self._leaderboardLoading = False
+    try:
+      try:
+        eliteTrashload, status = yield await_callback(leaderboard.getLastEliteRating(), LEADERBOARD_REQUEST_TIMEOUT)()
+        if not status: eliteTrashload = None
 
-    if not status:
-      print_warn("Failed to get elite trashload from leaderboard")
-      eliteTrashload = None
+      except TimeoutError:
+        print_warn("Timeout while getting leaderboard")
+        eliteTrashload = None
 
-    leaderboardPosition = ownData.position if ownData and ownData.isSuccess else None
+      except BrokenPromiseError:
+        print_warn("Failed to get leaderboard: request was cancelled")
+        eliteTrashload = None
 
+      try:
+        ownData = yield await_callback(leaderboard.getOwnData(), LEADERBOARD_REQUEST_TIMEOUT)() # type: _LeaderboardDataProvider._OwnData
+        leaderboardPosition = ownData.position if ownData and ownData.isSuccess else None
+
+      except TimeoutError: print_warn("Timeout while getting ownData")
+      except BrokenPromiseError: print_warn("Failed to get ownData: request was cancelled")
+
+    finally:
+      self._leaderboardLoading = False
+      
     if self._lastEliteTrashload == eliteTrashload and self._leaderboardPosition == leaderboardPosition:
-      callback(False)
-      return
+      raise AsyncReturn(False)
 
     self._lastEliteTrashload = eliteTrashload
     self._leaderboardPosition = leaderboardPosition
 
-    callback(True)
-    return
+    raise AsyncReturn(True)
 
   @with_exception_sending
   def updateRating(self):
@@ -133,20 +151,31 @@ class Comp7Logger:
     self._lastRating = currentRating
     return True
 
-  @adisp.adisp_process
+  @wg_async
   def onChanged(self):
-    season = self.getSeasonName()
-    if season is None: return
+    if self._leaderboardLoading: return
+    self._leaderboardLoading = True
 
-    leaderboardChanged = yield self.updateLeaderboard()
-    ratingChanged = self.updateRating()
+    try:
+      season = self.getSeasonName()
+      if season is None: return
 
-    if not leaderboardChanged and not ratingChanged:
-      return
+      leaderboardChanged = yield self.updateLeaderboard()
+      ratingChanged = self.updateRating()
+
+      if not leaderboardChanged and not ratingChanged: return
+      if not self._lastEliteTrashload and not self._lastRating and not self._leaderboardPosition: return
+      if self._lastRating is None: return
+      if not BigWorld.player(): return
   
-    event = OnComp7Info(season, self._lastRating, self._lastEliteTrashload, self._leaderboardPosition)
-    setup_hangar_event(event)
-    eventLogger.emit_event(event)
+      event = OnComp7Info(season, self._lastRating, self._lastEliteTrashload, self._leaderboardPosition)
+      setup_hangar_event(event)
+      eventLogger.emit_event(event)
+    except:
+      send_current_exception()
+      LOG_CURRENT_EXCEPTION()
+    finally:
+      self._leaderboardLoading = False
 
 
 comp7Logger = Comp7Logger()
