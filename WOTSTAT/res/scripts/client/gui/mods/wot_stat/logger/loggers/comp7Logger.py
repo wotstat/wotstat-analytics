@@ -5,7 +5,8 @@ from debug_utils import LOG_CURRENT_EXCEPTION
 
 from gui.shared.personality import ServicesLocator
 from gui.ClientUpdateManager import g_clientUpdateManager
-from helpers import dependency
+from helpers import dependency, isPlayerAccount
+from skeletons.gui.app_loader import GuiGlobalSpaceID
 from skeletons.gui.shared import IItemsCache
 from skeletons.gui.game_control import IComp7Controller
 from Event import SafeEvent
@@ -93,7 +94,8 @@ class Comp7Logger:
     self.onChanged()
 
   @with_exception_sending
-  def onGUISpaceEntered(self, *a, **k):
+  def onGUISpaceEntered(self, spaceID, *a, **k):
+    if spaceID != GuiGlobalSpaceID.LOBBY: return
     self.onChanged()
 
   @with_exception_sending
@@ -157,6 +159,8 @@ class Comp7Logger:
     self._leaderboardLoading = True
 
     try:
+      if not isPlayerAccount(): return
+
       season = self.getSeasonName()
       if season is None: return
 
@@ -166,7 +170,6 @@ class Comp7Logger:
       if not leaderboardChanged and not ratingChanged: return
       if not self._lastEliteTrashload and not self._lastRating and not self._leaderboardPosition: return
       if self._lastRating is None: return
-      if not BigWorld.player(): return
   
       event = OnComp7Info(season, self._lastRating, self._lastEliteTrashload, self._leaderboardPosition)
       setup_hangar_event(event)
