@@ -4,18 +4,17 @@ import json
 import personal_missions
 from PlayerEvents import g_playerEvents
 from skeletons.gui.battle_session import IBattleSessionProvider
-from skeletons.gui.lobby_context import ILobbyContext
 from skeletons.gui.server_events import IEventsCache
 from items import vehicles as vehiclesWG
-from constants import ARENA_PERIOD, FINISH_REASON, FINISH_REASON_NAMES
+from constants import ARENA_BONUS_TYPE, ARENA_PERIOD, FINISH_REASON, FINISH_REASON_NAMES
 from helpers import dependency
 
 try:
   from gui.battle_control.arena_info.arena_vos import Comp7Keys
-  from gui.impl.lobby.comp7 import comp7_i18n_helpers
-except:
+  from gui.impl.lobby.comp7 import comp7_i18n_helpers, comp7_shared
+except ImportError:
   from comp7.gui.battle_control.arena_info.arena_vos import Comp7Keys
-  from comp7.gui.impl.lobby.comp7_helpers import comp7_i18n_helpers
+  from comp7.gui.impl.lobby.comp7_helpers import comp7_i18n_helpers, comp7_shared
 
 try: from potapov_quests import PQ_STATE as PM_STATE
 except ImportError: from pm_quests import PM_STATE
@@ -23,7 +22,7 @@ except ImportError: from pm_quests import PM_STATE
 from ..eventLogger import eventLogger
 from ..events import OnBattleResult
 from ..sessionStorage import sessionStorage
-from ..utils import short_tank_type, get_tank_role, get_comp7_skill_tag, setup_dynamic_battle_info, setup_session_meta, setup_server_info
+from ..utils import short_tank_type, get_tank_role, get_comp7_vehicle_skill_tag, setup_dynamic_battle_info, setup_session_meta, setup_server_info
 from ..wotHookEvents import wotHookEvents
 from ...common.exceptionSending import with_exception_sending
 from ...utils import print_debug, print_error
@@ -121,46 +120,48 @@ def parsePersonalMissions(results):
 
   return parsedPmQuests
 
-def get_comp7_rank_tag(rankInfo, isQualActive, ranksConfig):
-  if isQualActive:
-    return 'qual'
+def get_comp7_rank_tag(rankInfo, isQualActive):
+  if isQualActive: return 'qual' 
+  if not rankInfo: return None
 
-  if not rankInfo:
-    return None
+  try: rank, divisionIdx = rankInfo
+  except: return None
 
-  try:
-    rank, divisionIdx = rankInfo
-  except:
-    return None
-
-  if not rank:
-    return None
+  if not rank: return None
 
   rankTag = comp7_i18n_helpers.RANK_MAP.get(rank, None)
-  if rankTag is None:
-    return None
+  if rankTag is None: return None
 
-  divisions = ()
-  try:
-    divisions = ranksConfig.divisionsByRank.get(rank, ())
-  except:
-    pass
-
-  if len(divisions) <= 1:
-    return rankTag
+  # Match Lesta's battle UI: keep the division whenever the client supplies it.
+  if divisionIdx <= 0: return rankTag
 
   divisionTag = comp7_i18n_helpers.DIVISION_MAP.get(divisionIdx, None)
-  if divisionTag is None:
-    return None
+  if divisionTag is None: return None
 
   return '{}_{}'.format(rankTag, divisionTag)
+
+def get_comp7_result_rank_tag(avatarResults):
+  rankInfo = avatarResults.get('comp7Rank') or ()
+  if len(rankInfo) != 3: return None
+
+  if avatarResults.get('comp7QualActive', False):
+    return get_comp7_rank_tag(None, True)
+
+  try:
+    rank, divisionIdx, _serialIdx = rankInfo
+    division = comp7_shared.getPlayerDivisionByRankAndIndex(rank, divisionIdx)
+    if division is None: return None
+    rankInfo = (comp7_shared.getRankEnumValue(division), comp7_shared.getDivisionEnumValue(division))
+  except Exception:
+    return None
+
+  return get_comp7_rank_tag(rankInfo, False)
 
 class OnBattleResultLogger:
   arenas_id_wait_battle_result = []
   battle_loaded = False
   eventsCache = dependency.descriptor(IEventsCache)
   sessionProvider = dependency.descriptor(IBattleSessionProvider)
-  lobbyContext = dependency.descriptor(ILobbyContext)
 
   def __init__(self):
     self.arenas_id_wait_battle_result = []
@@ -193,41 +194,31 @@ class OnBattleResultLogger:
 
   def on_arena_period_change(self, obj, period, *a, **k):
     if period is ARENA_PERIOD.AFTERBATTLE:
-      self.update_comp7_skill_tags()
-      self.update_comp7_ranks()
+      self.update_comp7_data()
 
   def on_avatar_become_non_player(self, obj, *a, **k):
-    self.update_comp7_skill_tags(obj.arenaUniqueID, obj)
-    self.update_comp7_ranks(obj.arenaUniqueID, obj)
+    self.update_comp7_data(obj.arenaUniqueID, obj)
 
-  def update_comp7_skill_tags(self, arenaID=None, player=None):
+  def update_comp7_data(self, arenaID=None, player=None):
     player = player or BigWorld.player()
     if not hasattr(player, 'arena') or player.arena is None:
+      return
+    if player.arena.bonusType != ARENA_BONUS_TYPE.COMP7 or (arenaID is not None and arenaID != player.arenaUniqueID):
       return
 
     arenaID = arenaID or player.arenaUniqueID
     skill_tags = self.comp7_skill_tags_by_arena.setdefault(arenaID, dict())
     for vehicleID, vehicle in player.arena.vehicles.iteritems():
-      skill_tag = get_comp7_skill_tag(vehicle.get('selectedComp7Skill', 0))
+      skill_tag = get_comp7_vehicle_skill_tag(vehicle)
       if skill_tag: skill_tags[vehicleID] = skill_tag
 
-  def update_comp7_ranks(self, arenaID=None, player=None):
-    player = player or BigWorld.player()
-    if not hasattr(player, 'arena') or player.arena is None:
-      return
-
-    arenaID = arenaID or player.arenaUniqueID
     try:
       arenaDP = self.sessionProvider.getArenaDP()
-      ranksConfig = self.lobbyContext.getServerSettings().comp7RanksConfig
-    except: return
-
-    try:
       comp7_ranks = self.comp7_ranks_by_arena.setdefault(arenaID, dict())
       for vInfo in arenaDP.getVehiclesInfoIterator():
         rankInfo = vInfo.gameModeSpecific.getValue(Comp7Keys.RANK, None)
         isQualActive = vInfo.gameModeSpecific.getValue(Comp7Keys.IS_QUAL_ACTIVE, False)
-        comp7_rank = get_comp7_rank_tag(rankInfo, isQualActive, ranksConfig)
+        comp7_rank = get_comp7_rank_tag(rankInfo, isQualActive)
         if comp7_rank: comp7_ranks[vInfo.vehicleID] = comp7_rank
     except Exception as e:
       print_error('failed to update comp7 ranks for arena: ' + str(e))
@@ -235,8 +226,7 @@ class OnBattleResultLogger:
   @with_exception_sending
   def on_battle_results_received(self, isPlayerVehicle, results):
     if not isPlayerVehicle or BattleReplay.isPlaying(): return
-    self.update_comp7_skill_tags(results.get('arenaUniqueID'))
-    self.update_comp7_ranks(results.get('arenaUniqueID'))
+    self.update_comp7_data(results.get('arenaUniqueID'))
     self.process_battle_result(results)
 
   @with_exception_sending
@@ -341,6 +331,9 @@ class OnBattleResultLogger:
         player = players[bdid]
         vehAvatar = avatars[bdid]
         squadID = player['prebattleID']
+
+        rankTag = get_comp7_result_rank_tag(vehAvatar)
+        if rankTag: comp7_ranks[vehicleId] = rankTag
         
         res = {
           'name': player['realName'],
@@ -376,7 +369,7 @@ class OnBattleResultLogger:
         'killerIndex': indexById[killerId] if killerId in indexById else -1,
         'squadID': squadStorage[squadID] if squadID in squadStorage else 0,
         'playerRank': personalAvatar['playerRank'],
-        'comp7SkillTag': battleEvent.comp7SkillTag,
+        'comp7SkillTag': battleEvent.comp7SkillTag or comp7_skill_tags.get(personalVehicleId, battleEvent.comp7SkillTag),
         'comp7Rank': comp7_ranks.get(personalVehicleId, None),
       }
       personal.update(getVehicleInfo(personalVehicle))

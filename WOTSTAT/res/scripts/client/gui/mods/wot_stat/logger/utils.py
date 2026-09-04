@@ -7,6 +7,7 @@ from gui.battle_control.battle_constants import FEEDBACK_EVENT_ID
 from helpers import dependency
 from items import vehicles as vehiclesWG, EQUIPMENT_TYPES, tankmen
 from skeletons.gui.battle_session import IBattleSessionProvider
+from skeletons.gui.game_control import IComp7Controller
 from .sessionStorage import sessionStorage
 from ..common.exceptionSending import with_exception_sending
 from ..load_mod import config
@@ -75,19 +76,32 @@ def get_comp7_skill_tag(skill_id):
   equipment = vehiclesWG.g_cache.getEquipmentByID(skill_id)
   return equipment.name if equipment is not None else None
 
+def get_comp7_vehicle_skill_tag(vehicle):
+  # Lesta allows choosing a skill; keep the actual selection, including zero.
+  if 'selectedComp7Skill' in vehicle:
+    return get_comp7_skill_tag(vehicle['selectedComp7Skill'])
+
+  vehicleDescr = vehicle.get('vehicleType')
+  if vehicleDescr is None:
+    return None
+
+  comp7Controller = dependency.instance(IComp7Controller)
+  if not hasattr(comp7Controller, 'getRoleEquipmentKey'):
+    return None
+
+  roleKey = comp7Controller.getRoleEquipmentKey(vehicleDescr.type)
+  equipment = comp7Controller.getRoleEquipment(roleKey)
+  return equipment.name if equipment is not None else None
+
 def get_current_comp7_skill_info(player):
   if player.arena.bonusType != ARENA_BONUS_TYPE.COMP7:
     return None
 
   vehicle = BigWorld.entities.get(player.playerVehicleID, None)
-  if vehicle is None or not hasattr(vehicle, 'selectedComp7Skill'):
-    return None
+  if vehicle is not None and hasattr(vehicle, 'selectedComp7Skill'):
+    return get_comp7_skill_tag(vehicle.selectedComp7Skill)
 
-  skill_id = vehicle.selectedComp7Skill
-  if not skill_id:
-    return None
-
-  return get_comp7_skill_tag(skill_id)
+  return get_comp7_vehicle_skill_tag(player.arena.vehicles.get(player.playerVehicleID, {}))
 
 def get_current_equipment_info(player):
   try:
