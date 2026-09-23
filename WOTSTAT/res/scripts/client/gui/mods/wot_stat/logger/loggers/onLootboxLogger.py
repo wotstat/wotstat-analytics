@@ -3,6 +3,8 @@ import os
 import time
 import json
 import base64
+import re
+from weakref import WeakKeyDictionary
 from typing import List  # noqa: F401
 
 from constants import LOOTBOX_TOKEN_PREFIX, PREMIUM_ENTITLEMENTS
@@ -26,22 +28,13 @@ from ...utils import print_log, print_warn, print_debug
 from ...common.exceptionSending import with_exception_sending
 from ..events import OnLootboxOpen
 from ..eventLogger import eventLogger
-from ..utils import setup_hangar_event, setup_session_meta, get_private_attr, setup_server_info
+from ..utils import setup_hangar_event, setup_session_meta, setup_server_info
 from ...common.crossGameUtils import lootboxKeyPrefix, getLootboxKeyNameByID, getLootboxKeyNameByTokenID
 
 
-try: 
-  from new_year.ny_constants import CurrentNYConstants, YEARS_INFO
-  NY_CURRENT_YEAR = YEARS_INFO.CURRENT_YEAR
-  NY_TOYS_TOKEN = CurrentNYConstants.TOYS
-
-except ImportError:
-  NY_CURRENT_YEAR = 26
-  NY_TOYS_TOKEN = 'ny26Toys'
-
-
-NY_MANDARIN_COMPENSATION_PREFIX = 'lb_comp:ny{}_mandarin:'.format(NY_CURRENT_YEAR)
-NY_MANDARIN_TOKEN = 'ny{}_mandarin'.format(NY_CURRENT_YEAR)
+NY_TOYS_TOKEN_PATTERN = re.compile(r'^ny([0-9]+)Toys$')
+NY_MANDARIN_TOKEN_PATTERN = re.compile(r'^ny[0-9]+_mandarin$')
+NY_MANDARIN_COMPENSATION_PATTERN = re.compile(r'^lb_comp:(ny[0-9]+_mandarin):([0-9]+):(.+)$')
 
 
 def prepareString(obj):
@@ -153,87 +146,131 @@ class OnLootboxLogger:
   itemsCache = dependency.descriptor(IItemsCache)
   goodiesCache = dependency.descriptor(IGoodiesCache)
 
-  lastOpenId = None
-  lastOpenKeyId = None
-  lastOpenCount = None
-  lastRerollCtx = None
-  lastRerollCount = -1
-  lastRerollClaimed = True
-
   def __init__(self):
-    wotHookEvents.LootBoxOpenProcessorOpenRequest += self.on_request
+    self.wtPending = {}
+    self.wtClaimRequests = WeakKeyDictionary()
+
     wotHookEvents.LootBoxOpenProcessorOpenResponse += self.on_response
-    
-    wotHookEvents.LootBoxRerollProcessorOpenRequest += self.on_reroll_request
-    wotHookEvents.LootBoxRerollProcessorOpenResponse += self.on_reroll_response
-    
-    wotHookEvents.LootBoxSystemOpenProcessorRequest += self.on_system_request
     wotHookEvents.LootBoxSystemOpenProcessorResponse += self.on_system_response
-    
-  def on_reroll_request(self, obj, *a, **k):
-    print_debug("Lootbox.on_reroll_request")
-    
-    self.lastOpenKeyId = 0
-    self.lastOpenId = obj._LootBoxReRollProcessor__lootBox.getID()
-    self.lastOpenCount = 1
-    self.lastRerollClaimed = False
-  
-  def on_request(self, obj, *a, **k):
-    print_debug("Lootbox.on_request")
-    
-    self.lastOpenKeyId = 0
-    if self.lastRerollClaimed: self.resetReroll()
-    
-    try: self.lastOpenKeyId = obj._LootBoxOpenProcessor__keyID
-    except AttributeError: pass
-  
-    self.lastOpenId = obj._LootBoxOpenProcessor__lootBox.getID()
-    self.lastOpenCount = obj._LootBoxOpenProcessor__count
 
-  def on_reroll_response(self, obj, code, ctx=None):
-    print_debug("Lootbox.on_reroll_response")
-    
-    if ctx is None:
-      print_warn('OnLootboxLogger.on_reroll_response: ctx is None')
-      return
-    
-    rerollCount = ctx.get('reRollCount', 0)
-    if self.lastRerollCount + 1 == rerollCount:
-      print_log("Lootbox.reroll (continue)[{}]".format(rerollCount))
-      if self.lastRerollCtx is not None:
-        self.got_rewards([self.lastRerollCtx.get('rewards', {})], claim=False, rerollCount=self.lastRerollCount)
-    else:
-      print_log("Lootbox.reroll (new)")
-      
-    self.lastRerollCount = rerollCount
-    self.lastRerollCtx = ctx
-    self.lastRerollClaimed = False
-    
-    if self.check_is_auto_claimed(obj, ctx):
-      print_log("Lootbox.reroll (auto-claim)")
-      self.got_rewards([ctx.get('rewards', {})], rerollCount=rerollCount)
-      self.resetReroll()
-        
-  def check_is_auto_claimed(self, obj, ctx):
-    controller = get_private_attr(obj, '__lootBoxesController')
-    boxType = get_private_attr(obj, '__boxType')
+    wotHookEvents.WTLootBoxRollResponse += self.on_wt_roll_response
+    wotHookEvents.WTLootBoxRerollResponse += self.on_wt_reroll_response
+    wotHookEvents.WTLootBoxHistoryResponse += self.on_wt_history_response
+    wotHookEvents.WTLootBoxClaimRequest += self.on_wt_claim_request
+    wotHookEvents.WTLootBoxClaimResponse += self.on_wt_claim_response
+    wotHookEvents.WTTankLootBoxOpened += self.on_wt_tank_opened
+    wotHookEvents.Account_onBecomeNonPlayer += self.on_wt_account_left
 
-    if not controller or not boxType: return False
-    if not hasattr(controller, 'isStopTokenAmongRewardList'): return False
-    
-    try:
-      from white_tiger.gui.game_control.loot_boxes_controller import _preprocessAwards
-      rewards = _preprocessAwards([ctx.get('rewards', {})])
-      return controller.isStopTokenAmongRewardList(rewards, boxType)
-    except: pass
-    
-    return False
-
-  def on_system_request(self, obj, *a, **k):
-    print_debug("Lootbox.on_system_request")
+  def on_wt_account_left(self, obj, *a, **k):
+    self.wtPending.clear()
+    self.wtClaimRequests.clear()
 
   def on_system_response(self, obj, code, ctx=None):
     print_debug("Lootbox.on_system_response")
+    if ctx is None:
+      return
+
+    box = obj._getLootBox()
+    self.got_rewards(ctx.get('bonus', []), lootboxId=box.getID(), openCount=obj._getCount(), keyId=0)
+
+  def _wt_auto_claimed(self, box, bonus):
+    from white_tiger.gui.game_control.loot_boxes_controller import _preprocessAwards
+    from skeletons.gui.game_control import ILootBoxesController
+
+    controller = dependency.instance(ILootBoxesController)
+    rewards = _preprocessAwards([bonus], box)
+    return controller.isStopTokenAmongRewardList(rewards, box.getType())
+
+  def _wt_store_reward(self, box, bonus, count, rerollCount):
+    if not isinstance(bonus, dict):
+      print_warn('OnLootboxLogger: WT bonus is not a dict')
+      return
+
+    pending = dict(bonus=bonus, count=count, rerollCount=rerollCount)
+    self.wtPending[box.getID()] = pending
+    if self._wt_auto_claimed(box, bonus):
+      self.wtPending.pop(box.getID(), None)
+      self.got_rewards([bonus], lootboxId=box.getID(), openCount=count,
+                       keyId=0, rerollCount=rerollCount, recordBoxCount=count)
+
+  def on_wt_roll_response(self, obj, code, ctx=None):
+    if ctx is None:
+      return
+
+    box = obj._WTLootBoxRollProcessor__lootBox
+    count = obj._WTLootBoxRollProcessor__lootBoxCount
+    self._wt_store_reward(box, ctx.get('bonus'), count, 0)
+
+  def on_wt_history_response(self, obj, code, ctx=None):
+    if not ctx or not isinstance(ctx.get('bonus'), dict):
+      return
+
+    boxId = obj._WtLootBoxReRollHistoryProcessor__boxID
+    if boxId in self.wtPending:
+      return
+
+    from skeletons.gui.game_control import ILootBoxesController
+    box = self.itemsCache.items.tokens.getLootBoxByID(boxId)
+    controller = dependency.instance(ILootBoxesController)
+    self.wtPending[boxId] = dict(bonus=ctx['bonus'],
+                                  count=ctx.get('boxCount', 1),
+                                  rerollCount=controller.getReRollAttemptsCount(box.getType()))
+
+  def on_wt_reroll_response(self, obj, code, ctx=None):
+    if ctx is None:
+      return
+
+    boxId = obj._WTLootBoxRerollProcessor__boxID
+    previous = self.wtPending.pop(boxId, None)
+    if previous is not None:
+      self.got_rewards([previous['bonus']], claim=False, lootboxId=boxId,
+                       openCount=previous['count'], keyId=0,
+                       rerollCount=previous['rerollCount'],
+                       recordBoxCount=previous['count'])
+
+    box = self.itemsCache.items.tokens.getLootBoxByID(boxId)
+    count = previous['count'] if previous is not None else ctx.get('boxCount', 1)
+    rerollCount = previous['rerollCount'] + 1 if previous is not None else 1
+    self._wt_store_reward(box, ctx.get('bonus'), count, rerollCount)
+
+  def on_wt_claim_request(self, obj, *a, **k):
+    boxId = obj._WtLootBoxClaimProcessor__boxID
+    pending = self.wtPending.get(boxId)
+    if pending is not None:
+      self.wtClaimRequests[obj] = (pending['count'], pending['rerollCount'])
+      return
+
+    from skeletons.gui.game_control import ILootBoxesController
+    box = self.itemsCache.items.tokens.getLootBoxByID(boxId)
+    controller = dependency.instance(ILootBoxesController)
+    self.wtClaimRequests[obj] = (
+      max(controller.getPendingBoxesCount(box.getType()), 1),
+      controller.getReRollAttemptsCount(box.getType()))
+
+  def on_wt_claim_response(self, obj, code, ctx=None):
+    requestedCount, requestedRerollCount = self.wtClaimRequests.pop(obj, (1, 0))
+    if ctx is None:
+      return
+
+    boxId = obj._WtLootBoxClaimProcessor__boxID
+    pending = self.wtPending.pop(boxId, None)
+    bonus = ctx.get('bonus') or (pending['bonus'] if pending else None)
+    if not isinstance(bonus, dict):
+      print_warn('OnLootboxLogger: WT claim bonus is not a dict')
+      return
+
+    count = pending['count'] if pending else requestedCount
+    rerollCount = pending['rerollCount'] if pending else requestedRerollCount
+    self.got_rewards([bonus], lootboxId=boxId, openCount=count, keyId=0, rerollCount=rerollCount, recordBoxCount=count)
+
+  def on_wt_tank_opened(self, requestId, resultId, errorStr, ext):
+    from AccountCommands import RES_SUCCESS
+    if resultId != RES_SUCCESS or not isinstance(ext, dict) or not ext.get('vehicles'):
+      return
+
+    box = self.itemsCache.items.tokens.getLootBoxByType('wt_tank')
+    if box is not None:
+      self.got_rewards([ext], lootboxId=box.getID(), openCount=1, keyId=0)
 
   def on_response(self, obj, code, ctx=None):
     print_debug("Lootbox.on_response")
@@ -242,26 +279,23 @@ class OnLootboxLogger:
       print_warn('OnLootboxLogger.on_response: ctx is None')
       return
     
-    if self.lastOpenId is None or self.lastOpenCount is None:
-      print_warn('OnLootboxLogger.on_response: lastOpenId or lastOpenCount is None')
-      return
-
     print_log("Lootbox.on_response")
-    self.got_rewards(ctx.get('bonus', []), rerollCount=max(self.lastRerollCount, 0))
-    self.resetReroll()
+    box = obj._LootBoxOpenProcessor__lootBox
+    count = obj._LootBoxOpenProcessor__count
+    keyId = getattr(obj, '_LootBoxOpenProcessor__keyID', 0)
+    self.got_rewards(ctx.get('bonus', []), lootboxId=box.getID(), openCount=count, keyId=keyId)
     
   @with_exception_sending
-  def got_rewards(self, bonuses, claim=True, rerollCount=0):
+  def got_rewards(self, bonuses, lootboxId, openCount, keyId=0,
+                  claim=True, rerollCount=0, recordBoxCount=1):
     print_log("GOT REWARD, claim: %s" % str(claim))
     print(bonuses)
-    
-    if claim: self.lastRerollClaimed = True
-    
-    lootboxTag = self.itemsCache.items.tokens.getLootBoxByID(self.lastOpenId).getType()
+
+    lootboxTag = self.itemsCache.items.tokens.getLootBoxByID(lootboxId).getType()
     openByTag = lootboxTag
     
-    if self.lastOpenKeyId is not None and self.lastOpenKeyId != 0:
-      openByTag = getLootboxKeyNameByID(self.lastOpenKeyId)
+    if keyId is not None and keyId != 0:
+      openByTag = getLootboxKeyNameByID(keyId)
       if openByTag is None: openByTag = lootboxTag
 
     unique_bytes = str(time.time()).encode('utf-8') + os.urandom(16)
@@ -277,7 +311,7 @@ class OnLootboxLogger:
       self.parseBerths(parsed, bonus)
       self.parseItems(parsed, bonus)
       self.parseGoodies(parsed, bonus)
-      self.parseTokens(parsed, bonus)
+      self.parseTokens(parsed, bonus, lootboxId, keyId)
       self.parseEntitlements(parsed, bonus)
       self.parseCustomizations(parsed, bonus)
       self.parseTankmen(parsed, bonus)
@@ -287,18 +321,13 @@ class OnLootboxLogger:
       self.parseDogtags(parsed, bonus)
       self.parseNewYearToys(parsed, bonus)
       
-      event = OnLootboxOpen(lootboxTag, openByTag, not self.isEmptyBonus(bonus), self.lastOpenCount, groupId, rerollCount)
+      event = OnLootboxOpen(lootboxTag, openByTag, not self.isEmptyBonus(bonus), openCount, groupId, rerollCount, recordBoxCount)
       event.setup(json.dumps(preprocessData(bonus), ensure_ascii=False), parsed, claim)
       setup_session_meta(event)
       setup_hangar_event(event)
       setup_server_info(event)
 
       eventLogger.emit_event(event)
-
-  def resetReroll(self):
-    self.lastRerollCount = -1
-    self.lastRerollCtx = None
-    self.lastRerollClaimed = True
 
   @with_exception_sending
   def isEmptyBonus(self, bonus):
@@ -385,7 +414,7 @@ class OnLootboxLogger:
       parsed['equip'] = equip
 
   @with_exception_sending
-  def parseTokens(self, parsed, bonus):
+  def parseTokens(self, parsed, bonus, lootboxId, keyId):
     parsed['lootboxesTokens'] = []
     parsed['bonusTokens'] = []
     parsed['extraTokens'] = []
@@ -395,14 +424,14 @@ class OnLootboxLogger:
       count = tokenData.get('count', 0)
 
       if tokenID.startswith(LOOTBOX_TOKEN_PREFIX):
-        if str(self.lastOpenId) == tokenID.split(':')[1]:
+        if str(lootboxId) == tokenID.split(':')[1]:
           count += 1
 
         if count != 0:
           parsed['lootboxesTokens'].append((self.itemsCache.items.tokens.getLootBoxByTokenID(tokenID).getType(), count))
           
       elif tokenID.startswith(LOOTBOX_KEY_PREFIX):
-        if str(self.lastOpenKeyId) == tokenID.split(':')[1]:
+        if str(keyId) == tokenID.split(':')[1]:
           count += 1
           
         if count != 0:
@@ -414,8 +443,8 @@ class OnLootboxLogger:
       elif tokenID.startswith(CREW_BONUS_X3_TOKEN):
         parsed['bonusTokens'].append(('crew_bonus_x3', count))
         
-      elif tokenID == NY_MANDARIN_TOKEN:
-        parsed['extraTokens'].append((NY_MANDARIN_TOKEN, count))
+      elif NY_MANDARIN_TOKEN_PATTERN.match(tokenID):
+        parsed['extraTokens'].append((tokenID, count))
 
   @with_exception_sending
   def parseEntitlements(self, parsed, bonus):
@@ -481,18 +510,22 @@ class OnLootboxLogger:
   def parseNewYearToys(self, parsed, bonus):
     parsed['toys'] = []
     
-    toys = bonus.get(NY_TOYS_TOKEN, {})
-    for toyID, count in toys.iteritems():
-      parsed['toys'].append(('ny{}_{}'.format(NY_CURRENT_YEAR, toyID), count))
+    for tokenID, toys in bonus.iteritems():
+      match = NY_TOYS_TOKEN_PATTERN.match(tokenID)
+      if match:
+        for toyID, count in toys.iteritems():
+          parsed['toys'].append(('ny{}_{}'.format(match.group(1), toyID), count))
       
     
     parsed['compensatedToys'] = []
     for tokenID, tokenValue in bonus.get('tokens', {}).iteritems():
-      if tokenID.startswith(NY_MANDARIN_COMPENSATION_PREFIX):
-        amount = int(tokenID.split(':')[2])
-        toy = tokenID.split(':')[3]
+      match = NY_MANDARIN_COMPENSATION_PATTERN.match(tokenID)
+      if match:
+        mandarinToken = match.group(1)
+        amount = int(match.group(2))
+        toy = match.group(3)
         count = tokenValue['count']
-        parsed['compensatedToys'].append((toy, NY_MANDARIN_TOKEN, amount * count))
+        parsed['compensatedToys'].append((toy, mandarinToken, amount * count))
         
     print(parsed['compensatedToys'])
 

@@ -7,9 +7,9 @@ from helpers import dependency
 from skeletons.connection_mgr import IConnectionManager
 from skeletons.gui.shared.utils import IHangarSpace
 from gui.shared.gui_items.processors.loot_boxes import LootBoxOpenProcessor
-
 from ..common.exceptionSending import SendExceptionEvent
 from ..common.hook import g_overrideLib
+from ..utils import print_warn
 
 
 class WotHookEvents:
@@ -54,10 +54,13 @@ class WotHookEvents:
     self.PlayerAvatar_enableServerAim = SendExceptionEvent()
     self.LootBoxOpenProcessorOpenRequest = SendExceptionEvent()
     self.LootBoxOpenProcessorOpenResponse = SendExceptionEvent()
-    self.LootBoxSystemOpenProcessorRequest = SendExceptionEvent()
     self.LootBoxSystemOpenProcessorResponse = SendExceptionEvent()
-    self.LootBoxRerollProcessorOpenRequest = SendExceptionEvent()
-    self.LootBoxRerollProcessorOpenResponse = SendExceptionEvent()
+    self.WTLootBoxRollResponse = SendExceptionEvent()
+    self.WTLootBoxRerollResponse = SendExceptionEvent()
+    self.WTLootBoxHistoryResponse = SendExceptionEvent()
+    self.WTLootBoxClaimRequest = SendExceptionEvent()
+    self.WTLootBoxClaimResponse = SendExceptionEvent()
+    self.WTTankLootBoxOpened = SendExceptionEvent()
 
   def __onConnected(self):
     self.onConnected()
@@ -190,35 +193,65 @@ def enableServerAim(self, *a, **k):
   wotHookEvents.PlayerAvatar_enableServerAim(self, *a, **k)
 
 
+try:
+  from gui.shared.gui_items.processors.loot_boxes import LootBoxSystemOpenProcessor
+  @g_overrideLib.registerEvent(LootBoxSystemOpenProcessor, '_successHandler')
+  def LootBoxSystemOpenProcessorResponse(self, *a, **k):
+    wotHookEvents.LootBoxSystemOpenProcessorResponse(self, *a, **k)
+except ImportError: pass
+except Exception as e:
+  print_warn('LootBoxSystemOpenProcessor hook skipped: %s' % e)
+
+
 @g_overrideLib.registerEvent(LootBoxOpenProcessor, '_request')
 def LootBoxOpenProcessorOpenRequest(self, *a, **k):
   wotHookEvents.LootBoxOpenProcessorOpenRequest(self, *a, **k)
 
+
 @g_overrideLib.registerEvent(LootBoxOpenProcessor, '_successHandler')
 def LootBoxOpenProcessorOpenResponse(self, *a, **k):
   wotHookEvents.LootBoxOpenProcessorOpenResponse(self, *a, **k)
-  
-try:
-  from gui.shared.gui_items.processors.loot_boxes import LootBoxReRollProcessor
-  
-  @g_overrideLib.registerEvent(LootBoxReRollProcessor, '_request')
-  def LootBoxRerollProcessorOpenRequest(self, *a, **k):
-    wotHookEvents.LootBoxRerollProcessorOpenRequest(self, *a, **k) 
-  
-  @g_overrideLib.registerEvent(LootBoxReRollProcessor, '_successHandler')
-  def LootBoxRerollProcessorOpenResponse(self, *a, **k):
-    wotHookEvents.LootBoxRerollProcessorOpenResponse(self, *a, **k) 
-except: pass
 
 try:
-  from gui.shared.gui_items.processors.loot_boxes import LootBoxSystemOpenProcessor
-  
-  @g_overrideLib.registerEvent(LootBoxSystemOpenProcessor, '_request')
-  def LootBoxSystemOpenProcessorRequest(self, *a, **k):
-    wotHookEvents.LootBoxSystemOpenProcessorRequest(self, *a, **k)
-  
-  @g_overrideLib.registerEvent(LootBoxSystemOpenProcessor, '_successHandler')
-  def LootBoxSystemOpenProcessorResponse(self, *a, **k):
-    wotHookEvents.LootBoxSystemOpenProcessorResponse(self, *a, **k)
+  from white_tiger.gui.game_control import loot_boxes_controller as wt_loot_boxes
 
-except: pass
+  @g_overrideLib.registerEvent(wt_loot_boxes._WTLootBoxRollProcessor, '_successHandler')
+  def WTLootBoxRollResponse(self, *a, **k):
+    wotHookEvents.WTLootBoxRollResponse(self, *a, **k)
+
+  @g_overrideLib.registerEvent(wt_loot_boxes._WtLootBoxClaimProcessor, '_request')
+  def WTLootBoxClaimRequest(self, *a, **k):
+    wotHookEvents.WTLootBoxClaimRequest(self, *a, **k)
+
+  @g_overrideLib.registerEvent(wt_loot_boxes._WtLootBoxClaimProcessor, '_successHandler')
+  def WTLootBoxClaimResponse(self, *a, **k):
+    wotHookEvents.WTLootBoxClaimResponse(self, *a, **k)
+
+  @g_overrideLib.registerEvent(wt_loot_boxes._WTLootBoxRerollProcessor, '_successHandler')
+  def WTLootBoxRerollResponse(self, *a, **k):
+    wotHookEvents.WTLootBoxRerollResponse(self, *a, **k)
+
+  @g_overrideLib.registerEvent(wt_loot_boxes._WtLootBoxReRollHistoryProcessor, '_successHandler')
+  def WTLootBoxHistoryResponse(self, *a, **k):
+    wotHookEvents.WTLootBoxHistoryResponse(self, *a, **k)
+except ImportError: pass
+except Exception as e:
+  print_warn('White Tiger loot box hook registration stopped: %s' % e)
+
+
+try:
+  from AccountWhiteTigerComponent import AccountWhiteTigerComponent
+  @g_overrideLib.overrideMethod(AccountWhiteTigerComponent, 'openTankLootBox')
+  def WTTankLootBoxOpened(original, self, callback=None):
+    if callback is None:
+      return original(self, callback)
+
+    def onResponse(*a, **k):
+      result = callback(*a, **k)
+      wotHookEvents.WTTankLootBoxOpened(*a, **k)
+      return result
+
+    return original(self, onResponse)
+except ImportError: pass
+except Exception as e:
+  print_warn('White Tiger tank loot box hook skipped: %s' % e)
