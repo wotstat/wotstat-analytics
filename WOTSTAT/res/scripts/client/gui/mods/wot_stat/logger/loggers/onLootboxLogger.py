@@ -311,7 +311,7 @@ class OnLootboxLogger:
       self.parseBerths(parsed, bonus)
       self.parseItems(parsed, bonus)
       self.parseGoodies(parsed, bonus)
-      self.parseTokens(parsed, bonus, lootboxId, keyId)
+      self.parseTokens(parsed, bonus, lootboxId, keyId, recordBoxCount)
       self.parseEntitlements(parsed, bonus)
       self.parseCustomizations(parsed, bonus)
       self.parseTankmen(parsed, bonus)
@@ -414,7 +414,7 @@ class OnLootboxLogger:
       parsed['equip'] = equip
 
   @with_exception_sending
-  def parseTokens(self, parsed, bonus, lootboxId, keyId):
+  def parseTokens(self, parsed, bonus, lootboxId, keyId, recordBoxCount):
     parsed['lootboxesTokens'] = []
     parsed['bonusTokens'] = []
     parsed['extraTokens'] = []
@@ -425,16 +425,16 @@ class OnLootboxLogger:
 
       if tokenID.startswith(LOOTBOX_TOKEN_PREFIX):
         if str(lootboxId) == tokenID.split(':')[1]:
-          count += 1
+          count += recordBoxCount
 
-        if count != 0:
+        if count > 0:
           parsed['lootboxesTokens'].append((self.itemsCache.items.tokens.getLootBoxByTokenID(tokenID).getType(), count))
           
       elif tokenID.startswith(LOOTBOX_KEY_PREFIX):
         if str(keyId) == tokenID.split(':')[1]:
-          count += 1
+          count += recordBoxCount
           
-        if count != 0:
+        if count > 0:
           parsed['lootboxesTokens'].append((getLootboxKeyNameByTokenID(tokenID), count))
         
       elif tokenID.startswith(BATTLE_BONUS_X5_TOKEN):
