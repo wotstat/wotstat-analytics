@@ -28,6 +28,8 @@ from ...utils import print_warn
 from ...common.exceptionSending import with_exception_sending, send_current_exception
 
 LEADERBOARD_REQUEST_TIMEOUT = 10.0
+LEGEND_DIVISION_IDS = (11, 12, 13)
+CHAMPION_DIVISION_IDS = (21, 22, 23)
 
 onOwnDataGet = SafeEvent()
 getOwnData_old = _LeaderboardDataProvider.getOwnData
@@ -106,6 +108,40 @@ class Comp7Logger:
     if self._leaderboardPosition == result.position: return
 
     BigWorld.callback(0, self.onChanged)
+
+  @wg_async
+  def getEliteRating(self, leaderboard):
+    eliteRating, status = yield await_callback(leaderboard.getLastEliteRating(), LEADERBOARD_REQUEST_TIMEOUT)()
+    if status and eliteRating: raise AsyncReturn(eliteRating)
+
+    getDivisionsFirstPositions = getattr(leaderboard, 'getDivisionsFirstPositions', None)
+    if not getDivisionsFirstPositions: raise AsyncReturn(None)
+
+    positions, status = yield await_callback(getDivisionsFirstPositions(), LEADERBOARD_REQUEST_TIMEOUT)()
+    if not status or not positions: raise AsyncReturn(None)
+    if not any(positions.get(str(division)) for division in LEGEND_DIVISION_IDS): raise AsyncReturn(None)
+
+    championPositions = [positions.get(str(division)) for division in CHAMPION_DIVISION_IDS]
+    championPositions = [position for position in championPositions if position]
+    if championPositions:
+      lastLegendPosition = min(championPositions) - 1
+    else:
+      lastLegendPosition, status = yield await_callback(leaderboard.getRecordsCount(), LEADERBOARD_REQUEST_TIMEOUT)()
+      if not status: raise AsyncReturn(None)
+
+    if not lastLegendPosition or lastLegendPosition < 1: raise AsyncReturn(None)
+
+    records = yield await_callback(leaderboard.getTableRecords(1, lastLegendPosition - 1), LEADERBOARD_REQUEST_TIMEOUT)()
+    if not records or records[0].getRank() != lastLegendPosition: raise AsyncReturn(None)
+
+    try:
+      division = int(records[0].getP1())
+      eliteRating = int(records[0].getP2())
+    except (TypeError, ValueError):
+      raise AsyncReturn(None)
+
+    if division not in LEGEND_DIVISION_IDS or eliteRating <= 0: raise AsyncReturn(None)
+    raise AsyncReturn(eliteRating)
   
   @wg_async
   def updateLeaderboard(self):
@@ -117,8 +153,7 @@ class Comp7Logger:
     self._leaderboardLoading = True
     try:
       try:
-        eliteTrashload, status = yield await_callback(leaderboard.getLastEliteRating(), LEADERBOARD_REQUEST_TIMEOUT)()
-        if not status: eliteTrashload = None
+        eliteTrashload = yield self.getEliteRating(leaderboard)
 
       except TimeoutError:
         print_warn("Timeout while getting leaderboard")
