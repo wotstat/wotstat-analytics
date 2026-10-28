@@ -3,6 +3,8 @@ import threading
 import BigWorld
 import functools
 
+from .crossGameUtils import gamePublisher, PUBLISHER
+
 try: import openwg_network
 except ImportError: openwg_network = None
 
@@ -11,6 +13,7 @@ json_headers = {
   'Accept': 'application/json'
 }
 
+# Legacy config URLs are rewritten before choosing the network transport.
 API_URL_PREFIX = 'https://wotstat.info'
 SERVERS_BASE_URL = [
   'https://wotstat.info',
@@ -18,6 +21,9 @@ SERVERS_BASE_URL = [
   'https://wotstat-proxy.ru',
   'http://wotstat-proxy.ru'
 ]
+
+if gamePublisher() == PUBLISHER.LESTA:
+  SERVERS_BASE_URL.insert(0, 'https://mtstat.info')
 
 currentServerIndex = 0
 
@@ -62,9 +68,6 @@ def next_server_index():
   return currentServerIndex
 
 def getApiUrl(url):
-  if shouldUseOpenWG(url):
-    return url
-  
   if url.startswith(API_URL_PREFIX):
     return url.replace(API_URL_PREFIX, SERVERS_BASE_URL[currentServerIndex], 1)
   return url

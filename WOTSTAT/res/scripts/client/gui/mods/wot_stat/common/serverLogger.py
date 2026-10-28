@@ -12,7 +12,7 @@ import excepthook
 from constants import AUTH_REALM
 from debug_utils import _addTagsToMsg, _makeMsgHeader, LOG_CURRENT_EXCEPTION, _src_file_trim_to, _g_logLock
 from .asyncResponse import post_async
-from .crossGameUtils import readClientServerVersion
+from .crossGameUtils import readClientServerVersion, gamePublisher, PUBLISHER
 
 logger = None  # type: ServerLogger
 modVersion = 'unknown'
@@ -27,6 +27,10 @@ SERVERS_URL = [
   'https://teleport-spb-1.openwg.net/loki.wotstat.info/loki/api/v1/push',
   'http://teleport-msk-1.openwg.net/loki.wotstat.info/loki/api/v1/push'
 ]
+
+if gamePublisher() == PUBLISHER.LESTA:
+  SERVERS_URL.insert(0, 'https://loki.mtstat.info/loki/api/v1/push')
+
 JSON_HEADERS = {'Content-type': 'application/json', 'Accept': 'application/json'}
 
 

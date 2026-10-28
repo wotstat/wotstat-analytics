@@ -66,7 +66,7 @@ def hello_message():
   if not api_server_time: return
   if not BigWorld.player(): return
 
-  base = 'ru.wotstat.info' if gamePublisher() == PUBLISHER.LESTA else 'wotstat.info'
+  base = 'mtstat.info' if gamePublisher() == PUBLISHER.LESTA else 'wotstat.info'
   target_url = '%s/session?mode=any&nickname=%s&from=%s' % (base, BigWorld.player().name, api_server_time)
   print_log(target_url)
 
