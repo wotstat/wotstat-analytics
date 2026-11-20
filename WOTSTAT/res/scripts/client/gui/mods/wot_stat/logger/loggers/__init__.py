@@ -1,8 +1,6 @@
 import BigWorld
 
-from debug_utils import LOG_CURRENT_EXCEPTION
-from ...common.exceptionSending import send_current_exception    
-from ...utils import print_error
+from ...common.exceptionSending import with_exception_sending
 
 # from ribbonsLogger import onRibbonsLogger
 # from onShotReceiveLogger import onShotReceiveLogger
@@ -15,12 +13,14 @@ loggers = [
   'moeLogger',
   'comp7Logger',
   'accountStatsLogger',
+  'onRaccoonRaidLogger',
 ]
 
-pkg = __name__
+
+@with_exception_sending
+def _load_logger(name):
+  __import__(__name__ + '.' + name, globals(), locals(), [name], -1)
+
+
 for name in loggers:
-  try: __import__(pkg + '.' + name, globals(), locals(), [name], -1)
-  except Exception:
-    print_error("Error while importing logger: {}".format(name))
-    send_current_exception()
-    LOG_CURRENT_EXCEPTION()
+  _load_logger(name)

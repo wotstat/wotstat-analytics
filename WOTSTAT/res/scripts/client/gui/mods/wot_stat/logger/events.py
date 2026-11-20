@@ -15,11 +15,12 @@ class Event(object):
     ON_SHOT = 'OnShot'
     ON_BATTLE_RESULT = 'OnBattleResult'
     ON_LOOTBOX_OPEN = 'OnLootboxOpen'
+    ON_RACCOON_RAID_REWARD = 'OnRaccoonRaidReward'
     ON_MOE_INFO = 'OnMoeInfo'
     ON_COMP7_INFO = 'OnComp7Info'
     ON_ACCOUNT_STATS = 'OnAccountStats'
 
-    HANGAR_EVENTS = [ON_LOOTBOX_OPEN, ON_MOE_INFO, ON_COMP7_INFO, ON_ACCOUNT_STATS]
+    HANGAR_EVENTS = [ON_LOOTBOX_OPEN, ON_RACCOON_RAID_REWARD, ON_MOE_INFO, ON_COMP7_INFO, ON_ACCOUNT_STATS]
 
   def __init__(self, event_name):
     self.eventName = event_name
@@ -337,6 +338,18 @@ class OnLootboxOpen(HangarEvent):
     self.raw = raw
     self.parsed = parsed
     self.claimed = claimed
+
+
+class OnRaccoonRaidReward(HangarEvent):
+  def __init__(self, startTime, durationSeconds, primaryDurationSeconds, slots, parsed, raw):
+    HangarEvent.__init__(self, Event.NAMES.ON_RACCOON_RAID_REWARD)
+    self.startTime = startTime
+    self.durationSeconds = durationSeconds
+    self.primaryDurationSeconds = primaryDurationSeconds
+    self.slots = slots
+    self.parsed = parsed
+    self.raw = raw
+
 
 class OnMoeInfo(HangarEvent):
   def __init__(self, tankTag, battleCount, moeDistribution):

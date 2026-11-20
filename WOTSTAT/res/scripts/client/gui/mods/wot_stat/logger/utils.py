@@ -1,3 +1,4 @@
+import base64
 import re
 
 import BigWorld
@@ -401,7 +402,29 @@ def setup_hangar_event(hangarEvent):
   # type: (HangarEvent) -> None
 
   setup_event_context(hangarEvent)
+
+def _encode_non_utf8_bytes(value):
+  try:
+    value.decode('utf-8')
+  except UnicodeDecodeError:
+    return base64.b64encode(value)
+  return value
+
+def prepare_for_json(value):
+  if isinstance(value, set):
+    return list(value)
   
+  if isinstance(value, str):
+    return _encode_non_utf8_bytes(value)
+  
+  if isinstance(value, dict):
+    return {_encode_non_utf8_bytes(str(key)): prepare_for_json(item) for key, item in value.items()}
+  
+  if isinstance(value, (list, tuple)):
+    return [prepare_for_json(item) for item in value]
+  
+  return value
+
 def get_private_attr(obj, attr):
   className = obj.__class__.__name__
   

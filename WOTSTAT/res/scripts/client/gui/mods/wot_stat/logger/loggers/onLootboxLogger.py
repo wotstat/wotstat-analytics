@@ -2,7 +2,6 @@ import hashlib
 import os
 import time
 import json
-import base64
 import re
 from weakref import WeakKeyDictionary
 from typing import List  # noqa: F401
@@ -28,7 +27,7 @@ from ...utils import print_log, print_warn, print_debug
 from ...common.exceptionSending import with_exception_sending
 from ..events import OnLootboxOpen
 from ..eventLogger import eventLogger
-from ..utils import setup_hangar_event
+from ..utils import prepare_for_json, setup_hangar_event
 from ...common.crossGameUtils import lootboxKeyPrefix, getLootboxKeyNameByID, getLootboxKeyNameByTokenID
 
 
@@ -36,27 +35,6 @@ NY_TOYS_TOKEN_PATTERN = re.compile(r'^ny([0-9]+)Toys$')
 NY_MANDARIN_TOKEN_PATTERN = re.compile(r'^ny[0-9]+_mandarin$')
 NY_MANDARIN_COMPENSATION_PATTERN = re.compile(r'^lb_comp:(ny[0-9]+_mandarin):([0-9]+):(.+)$')
 
-
-def prepareString(obj):
-  if isinstance(obj, str):
-    try:
-      obj.decode('utf-8')
-    except UnicodeDecodeError:
-      return base64.b64encode(obj)
-  return obj
-
-def preprocessData(obj):
-  if isinstance(obj, set):
-    return list(obj)
-  elif isinstance(obj, str):
-    return prepareString(obj)
-  elif isinstance(obj, dict):
-    return { prepareString(str(k)): preprocessData(v) for k, v in obj.items() }
-  elif isinstance(obj, list):
-    return [preprocessData(i) for i in obj]
-  elif isinstance(obj, tuple):
-    return [preprocessData(i) for i in obj]
-  return obj
 
 ALL_CURRENCIES = [ Currency.CREDITS, Currency.GOLD, Currency.FREE_XP, Currency.CRYSTAL, Currency.EVENT_COIN, Currency.BPCOIN, Currency.EQUIP_COIN ]
 LOOTBOX_KEY_PREFIX = lootboxKeyPrefix()
@@ -322,7 +300,7 @@ class OnLootboxLogger:
       self.parseNewYearToys(parsed, bonus)
       
       event = OnLootboxOpen(lootboxTag, openByTag, not self.isEmptyBonus(bonus), openCount, groupId, rerollCount, recordBoxCount)
-      event.setup(json.dumps(preprocessData(bonus), ensure_ascii=False), parsed, claim)
+      event.setup(json.dumps(prepare_for_json(bonus), ensure_ascii=False), parsed, claim)
       setup_hangar_event(event)
 
       eventLogger.emit_event(event)

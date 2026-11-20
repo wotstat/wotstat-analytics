@@ -7,7 +7,8 @@ from helpers import dependency
 from skeletons.connection_mgr import IConnectionManager
 from skeletons.gui.shared.utils import IHangarSpace
 from gui.shared.gui_items.processors.loot_boxes import LootBoxOpenProcessor
-from ..common.exceptionSending import SendExceptionEvent
+from ..common.crossGameUtils import PUBLISHER, gamePublisher
+from ..common.exceptionSending import SendExceptionEvent, with_exception_sending
 from ..common.hook import g_overrideLib
 from ..utils import print_warn
 
@@ -61,6 +62,8 @@ class WotHookEvents:
     self.WTLootBoxClaimRequest = SendExceptionEvent()
     self.WTLootBoxClaimResponse = SendExceptionEvent()
     self.WTTankLootBoxOpened = SendExceptionEvent()
+    self.RaccoonRaidRewardRequest = SendExceptionEvent()
+    self.RaccoonRaidRewardResponse = SendExceptionEvent()
 
   def __onConnected(self):
     self.onConnected()
@@ -255,3 +258,32 @@ try:
 except ImportError: pass
 except Exception as e:
   print_warn('White Tiger tank loot box hook skipped: %s' % e)
+
+
+try:
+  if gamePublisher() == PUBLISHER.LESTA:
+    from new_year.gui.shared.gui_items.processors.ny_processor import ReceiveTamagotchiRaidRewardProcessor
+
+    @with_exception_sending
+    def onRaccoonRaidRequest(processor):
+      wotHookEvents.RaccoonRaidRewardRequest(processor)
+
+    @with_exception_sending
+    def onRaccoonRaidResponse(processor, result):
+      ctx = result.auxData if result is not None and result.success else None
+      wotHookEvents.RaccoonRaidRewardResponse(processor, ctx)
+
+    @g_overrideLib.overrideMethod(ReceiveTamagotchiRaidRewardProcessor, '_request')
+    def RaccoonRaidReward(original, self, callback):
+      if callback is None:
+        return original(self, callback)
+
+      def onResponse(result):
+        onRaccoonRaidResponse(self, result)
+        return callback(result)
+
+      onRaccoonRaidRequest(self)
+      return original(self, onResponse)
+except ImportError: pass
+except Exception as e:
+  with_exception_sending(print_warn)('Raccoon raid reward hook skipped: %s' % e)
