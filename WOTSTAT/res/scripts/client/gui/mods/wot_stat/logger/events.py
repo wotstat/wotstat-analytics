@@ -2,7 +2,6 @@
 
 import datetime
 
-import BigWorld  
 from constants import AUTH_REALM
 from ..load_mod import config
 from ..common.crossGameUtils import readClientServerVersion
@@ -10,7 +9,7 @@ from ..common.crossGameUtils import readClientServerVersion
 GAME_VERSION = readClientServerVersion()[1]
 
 
-class Event:
+class Event(object):
   class NAMES:
     ON_BATTLE_START = 'OnBattleStart'
     ON_SHOT = 'OnShot'
@@ -22,7 +21,6 @@ class Event:
 
     HANGAR_EVENTS = [ON_LOOTBOX_OPEN, ON_MOE_INFO, ON_COMP7_INFO, ON_ACCOUNT_STATS]
 
-
   def __init__(self, event_name):
     self.eventName = event_name
     self.localtime = get_current_date()
@@ -30,26 +28,27 @@ class Event:
     self.gameVersion = GAME_VERSION
     self.modVersion = config.get('version')
 
-
   def get_dict(self):
     return self.__dict__
 
 
+class PlayerInfo(object):
+  def __init__(self):
+    self.playerName = None
+    self.accountDBID = None
+    self.playerClan = None
+    self.playerClanDBID = None
+
+  def setupPlayerInfo(self, playerName, accountDBID, playerClan, playerClanDBID):
+    self.playerName = playerName
+    self.accountDBID = accountDBID
+    self.playerClan = playerClan
+    self.playerClanDBID = playerClanDBID
+
+
 class SessionMeta(object):
-  sessionStart = ''
-  lastBattleAgo = 0
-  sessionStartAgo = 0
-
-  battleStarts = 0
-  battleResults = 0
-  winCount = 0
-  totalShots = 0
-  totalShotsDamaged = 0
-  totalShotsHit = 0
-
-  lastResult = []
-  lastDmgPlace = []
-  lastXpPlace = []
+  def __init__(self):
+    self.setupSessionMeta(0, 0, 0, 0, 0, 0, [], [], [], '', 0, 0)
 
   def setupSessionMeta(self, battleStarts, battleResults, winCount, totalShots, totalShotsDamaged, totalShotsHit,
                        lastResult, lastDmgPlace, lastXpPlace, sessionStart, lastBattleAgo, sessionStartAgo):
@@ -67,32 +66,23 @@ class SessionMeta(object):
     self.lastXpPlace = list(lastXpPlace)
 
 class ServerInfo(object):
-  serverName = ''
-  serverOnline = 0
-  regionOnline = 0
+  def __init__(self):
+    self.setupServerInfo('', 0, 0)
   
   def setupServerInfo(self, serverName, serverOnline, regionOnline):
     self.serverName = serverName
     self.serverOnline = serverOnline
     self.regionOnline = regionOnline
 
-class BattleEvent(Event):
-  def __init__(self, event_name, battleTime):
-    Event.__init__(self, event_name)
-    self.battleTime = battleTime
-
-
-class HangarEvent(Event):
+class HangarEvent(Event, PlayerInfo, ServerInfo, SessionMeta):
   def __init__(self, event_name):
     Event.__init__(self, event_name)
-
-    self.playerName = None
-
-  def setupHangarEvent(self, playerName):
-    self.playerName = playerName
+    PlayerInfo.__init__(self)
+    ServerInfo.__init__(self)
+    SessionMeta.__init__(self)
 
 
-class BattleExtra():
+class BattleExtra(object):
   
   def __init__(self):
     self.extra = {}
@@ -100,14 +90,10 @@ class BattleExtra():
   def setupExtra(self, extra):
     self.extra = extra
 
-class DynamicBattleEvent(BattleEvent, BattleExtra):
-  def __init__(self, event_name, battleTime):
-    BattleEvent.__init__(self, event_name, battleTime)
+class DynamicBattleInfo(BattleExtra):
+  def __init__(self):
+    BattleExtra.__init__(self)
     self.arenaTag = None
-    self.playerName = None
-    self.playerClan = None
-    self.playerClanDBID = None
-    self.accountDBID = None
     self.battleMode = None
     self.battleGameplay = None
     self.team = None
@@ -129,16 +115,13 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
     self.battleBooster = None
     self.shells = None
     self.crew = None
+    self.systemInfo = None
 
-  def setupDynamicBattleInfo(self, arenaTag, playerName, playerClan, playerClanDBID, accountDBID, battleMode, battleGameplay,
+  def setupDynamicBattleInfo(self, arenaTag, battleMode, battleGameplay,
                              team, tankTag, tankType, tankRole, tankLevel, gunTag, comp7SkillTag, allyTeamHealth, enemyTeamHealth,
                              allyTeamMaxHealth, enemyTeamMaxHealth, allyTeamFragsCount, enemyTeamFragsCount, mapsBlackList,
                              equipment, consumables, battleBooster, shells, crew):
     self.arenaTag = arenaTag
-    self.playerName = playerName
-    self.playerClan = playerClan
-    self.playerClanDBID = playerClanDBID
-    self.accountDBID = accountDBID
     self.battleMode = battleMode
     self.battleGameplay = battleGameplay
     self.team = team
@@ -164,11 +147,23 @@ class DynamicBattleEvent(BattleEvent, BattleExtra):
   def setupSystemInfo(self, info):
     self.systemInfo = info
 
-class OnBattleStart(DynamicBattleEvent, SessionMeta, ServerInfo):
+class BattleEvent(Event, DynamicBattleInfo, PlayerInfo, ServerInfo, SessionMeta):
+  def __init__(self, event_name, battleTime=None):
+    Event.__init__(self, event_name)
+    DynamicBattleInfo.__init__(self)
+    PlayerInfo.__init__(self)
+    ServerInfo.__init__(self)
+    SessionMeta.__init__(self)
+    
+    if battleTime is not None:
+      self.battleTime = battleTime
+
+
+class OnBattleStart(BattleEvent):
 
   def __init__(self, arenaId, spawnPoint, battleTime,
                battlePeriod, loadTime, preBattleWaitTime, inQueueWaitTime, gameplayMask):
-    DynamicBattleEvent.__init__(self, Event.NAMES.ON_BATTLE_START, battleTime)
+    BattleEvent.__init__(self, Event.NAMES.ON_BATTLE_START, battleTime)
 
     self.arenaID = arenaId
     self.spawnPoint = spawnPoint
@@ -179,13 +174,13 @@ class OnBattleStart(DynamicBattleEvent, SessionMeta, ServerInfo):
     self.gameplayMask = gameplayMask
 
 
-class OnShot(DynamicBattleEvent, SessionMeta, ServerInfo):
+class OnShot(BattleEvent):
   class HIT_REASON:
     TANK = 'tank'
     TERRAIN = 'terrain'
 
   def __init__(self):
-    DynamicBattleEvent.__init__(self, Event.NAMES.ON_SHOT, 0)
+    BattleEvent.__init__(self, Event.NAMES.ON_SHOT)
 
     self.battleTime = None
     self.serverMarkerPoint = None
@@ -318,17 +313,16 @@ class OnShot(DynamicBattleEvent, SessionMeta, ServerInfo):
     self.battleTime = time
 
 
-class OnBattleResult(DynamicBattleEvent, SessionMeta, ServerInfo):
-  result = None
-
+class OnBattleResult(BattleEvent):
   def __init__(self):
-    DynamicBattleEvent.__init__(self, Event.NAMES.ON_BATTLE_RESULT, 0)
+    BattleEvent.__init__(self, Event.NAMES.ON_BATTLE_RESULT)
+    self.result = None
 
   def set_result(self, result):
     self.result = result
 
 
-class OnLootboxOpen(HangarEvent, SessionMeta, ServerInfo):
+class OnLootboxOpen(HangarEvent):
   def __init__(self, containerTag, openByTag, isOpenSuccess, openCount, openGroup, rerollCount, recordBoxCount=1):
     HangarEvent.__init__(self, Event.NAMES.ON_LOOTBOX_OPEN)
     self.containerTag = containerTag
@@ -352,11 +346,11 @@ class OnMoeInfo(HangarEvent):
     self.moeDistribution = moeDistribution
 
 class OnComp7Info(HangarEvent):
-  def __init__(self, season, rating, eliteRating, leaderboardPosition):
+  def __init__(self, season, rating, rank, leaderboardPosition):
     HangarEvent.__init__(self, Event.NAMES.ON_COMP7_INFO)
     self.season = season
     self.rating = rating
-    self.eliteRating = eliteRating
+    self.rank = rank
     self.leaderboardPosition = leaderboardPosition
 
 class OnAccountStats(HangarEvent):

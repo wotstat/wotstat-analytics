@@ -28,7 +28,7 @@ from ...utils import print_log, print_warn, print_debug
 from ...common.exceptionSending import with_exception_sending
 from ..events import OnLootboxOpen
 from ..eventLogger import eventLogger
-from ..utils import setup_hangar_event, setup_session_meta, setup_server_info
+from ..utils import setup_hangar_event
 from ...common.crossGameUtils import lootboxKeyPrefix, getLootboxKeyNameByID, getLootboxKeyNameByTokenID
 
 
@@ -102,7 +102,7 @@ def getVehicleInfos(vehicles):
       elif isRented:
         rentData = vehData['rent']
         rentType, rentValue = getRentInfo(rentData)
-        rentedVehNames.append((tankTag, rentType, rentValue))
+        rentedVehNames.append((tankTag, rentType, str(rentValue)))
       else:
         addVehNames.append(tankTag)
 
@@ -323,9 +323,7 @@ class OnLootboxLogger:
       
       event = OnLootboxOpen(lootboxTag, openByTag, not self.isEmptyBonus(bonus), openCount, groupId, rerollCount, recordBoxCount)
       event.setup(json.dumps(preprocessData(bonus), ensure_ascii=False), parsed, claim)
-      setup_session_meta(event)
       setup_hangar_event(event)
-      setup_server_info(event)
 
       eventLogger.emit_event(event)
 
@@ -498,7 +496,7 @@ class OnLootboxLogger:
   @with_exception_sending
   def parseSelectableCrewbook(self, parsed, bonus):
     selectableCrewbook = bonus.get('selectableCrewbook', {})
-    parsed['selectableCrewbook'] = [crewbookName for crewbookName, data in selectableCrewbook.iteritems()]
+    parsed['selectableCrewbook'] = [(crewbookName,) for crewbookName in selectableCrewbook]
   
   # TODO: dogtags
   @with_exception_sending

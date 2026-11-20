@@ -4,12 +4,19 @@ import BigWorld
 from BattleFeedbackCommon import BATTLE_EVENT_TYPE
 from constants import ARENA_BONUS_TYPE, ARENA_GAMEPLAY_NAMES, ROLE_TYPE_TO_LABEL
 from gui.battle_control.battle_constants import FEEDBACK_EVENT_ID
-from helpers import dependency
+from helpers import dependency, isPlayerAccount
 from items import vehicles as vehiclesWG, EQUIPMENT_TYPES, tankmen
 from skeletons.gui.battle_session import IBattleSessionProvider
 from skeletons.gui.game_control import IComp7Controller
+from skeletons.gui.shared import IItemsCache
+
+try: from gui.impl.lobby.comp7 import comp7_i18n_helpers
+except ImportError: from comp7.gui.impl.lobby.comp7_helpers import comp7_i18n_helpers
+
+
 from .sessionStorage import sessionStorage
 from ..common.exceptionSending import with_exception_sending
+from ..common.crossGameUtils import gamePublisher, PUBLISHER
 from ..load_mod import config
 from ..utils import print_error
 from .extra.ExtraCollector import ExtraCollector
@@ -19,7 +26,7 @@ from .providers.AccountStatsProvider import AccountStatsProvider
 from .providers.ServerOnlineProvider import ServerOnlineProvider
 from .providers.SystemInfoProvider import SystemInfoProvider
 
-from .events import DynamicBattleEvent, SessionMeta, ServerInfo, HangarEvent  # noqa: F401
+from .events import DynamicBattleInfo, PlayerInfo, SessionMeta, ServerInfo, BattleEvent, HangarEvent  # noqa: F401
 
 import typing
 if typing.TYPE_CHECKING:
@@ -68,6 +75,28 @@ def get_tank_type(vehicleTags):
 def get_tank_role(role):
   return ROLE_TYPE_TO_LABEL.get(role, 'None')
 
+def get_comp7_rank_tag(rankInfo, isQualActive):
+  if isQualActive: return 'qual'
+  if not rankInfo: return None
+
+  try: rank, divisionIdx = rankInfo
+  except (TypeError, ValueError): return None
+
+  rankTag = comp7_i18n_helpers.RANK_MAP.get(rank)
+  if rankTag is None: return None
+
+  isPrestigeRank = rankTag in ('fifth', 'sixth')
+  if isPrestigeRank and gamePublisher() == PUBLISHER.WARGAMING: return rankTag
+
+  if divisionIdx is None: return None
+  # Match Lesta's battle UI: keep the division whenever the client supplies it.
+  if divisionIdx <= 0: return rankTag
+
+  divisionTag = comp7_i18n_helpers.DIVISION_MAP.get(divisionIdx)
+  if divisionTag is None: return None
+  if isPrestigeRank and divisionTag not in ('A', 'B', 'C'): return None
+
+  return '{}_{}'.format(rankTag, divisionTag)
 
 def get_comp7_skill_tag(skill_id):
   if not skill_id:
@@ -279,6 +308,29 @@ def get_current_crew_info(player):
 
 
 @with_exception_sending
+def setup_player_info(playerInfo):
+  # type: (PlayerInfo) -> None
+
+  player = BigWorld.player()
+  if isPlayerAccount():
+    stats = dependency.instance(IItemsCache).items.stats
+    clanInfo = stats.clanInfo
+    playerInfo.setupPlayerInfo(
+      playerName=player.name,
+      accountDBID=player.databaseID,
+      playerClan=(clanInfo[1] if clanInfo and len(clanInfo) > 1 else None) or '',
+      playerClanDBID=stats.clanDBID or 0,
+    )
+  else:
+    vehicle = player.arena.vehicles[player.playerVehicleID]
+    playerInfo.setupPlayerInfo(
+      playerName=player.name,
+      accountDBID=vehicle['accountDBID'],
+      playerClan=vehicle['clanAbbrev'] or '',
+      playerClanDBID=vehicle['clanDBID'] or 0,
+    )
+
+@with_exception_sending
 def setup_server_info(serverInfo):
   # type: (ServerInfo) -> None
   
@@ -295,16 +347,11 @@ def setup_server_info(serverInfo):
 
 @with_exception_sending
 def setup_dynamic_battle_info(dynamicBattleEvent):
-  # type: (DynamicBattleEvent) -> None
+  # type: (DynamicBattleInfo) -> None
   
   player = BigWorld.player()
-  
   dynamicBattleEvent.setupDynamicBattleInfo(
     arenaTag=player.arena.arenaType.geometry,
-    playerName=player.name,
-    playerClan=player.arena.vehicles[player.playerVehicleID]['clanAbbrev'],
-    playerClanDBID=player.arena.vehicles[player.playerVehicleID]['clanDBID'],
-    accountDBID=player.arena.vehicles[player.playerVehicleID]['accountDBID'],
     battleMode=ARENA_TAGS[player.arena.bonusType],
     battleGameplay=ARENA_GAMEPLAY_NAMES[player.arenaTypeID >> 16],
     team=player.team,
@@ -332,16 +379,28 @@ def setup_dynamic_battle_info(dynamicBattleEvent):
   dynamicBattleEvent.setupExtra(ExtraCollector.instance().getExtraData())
 
 @with_exception_sending
-def setup_session_meta(dynamicBattleEvent):
+def setup_session_meta(sessionMeta):
   # type: (SessionMeta) -> None
   
-  sessionStorage.setup_session_meta(dynamicBattleEvent)
+  sessionStorage.setup_session_meta(sessionMeta)
+
+def setup_event_context(event):
+  setup_player_info(event)
+  setup_server_info(event)
+  setup_session_meta(event)
+
+@with_exception_sending
+def setup_battle_event(battleEvent):
+  # type: (BattleEvent) -> None
+
+  setup_event_context(battleEvent)
+  setup_dynamic_battle_info(battleEvent)
 
 @with_exception_sending
 def setup_hangar_event(hangarEvent):
   # type: (HangarEvent) -> None
 
-  hangarEvent.setupHangarEvent(BigWorld.player().name)
+  setup_event_context(hangarEvent)
   
 def get_private_attr(obj, attr):
   className = obj.__class__.__name__

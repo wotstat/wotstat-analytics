@@ -11,10 +11,10 @@ from helpers import dependency
 
 try:
   from gui.battle_control.arena_info.arena_vos import Comp7Keys
-  from gui.impl.lobby.comp7 import comp7_i18n_helpers, comp7_shared
+  from gui.impl.lobby.comp7 import comp7_shared
 except ImportError:
   from comp7.gui.battle_control.arena_info.arena_vos import Comp7Keys
-  from comp7.gui.impl.lobby.comp7_helpers import comp7_i18n_helpers, comp7_shared
+  from comp7.gui.impl.lobby.comp7_helpers import comp7_shared
 
 try: from potapov_quests import PQ_STATE as PM_STATE
 except ImportError: from pm_quests import PM_STATE
@@ -22,7 +22,7 @@ except ImportError: from pm_quests import PM_STATE
 from ..eventLogger import eventLogger
 from ..events import OnBattleResult
 from ..sessionStorage import sessionStorage
-from ..utils import short_tank_type, get_tank_role, get_comp7_vehicle_skill_tag, setup_dynamic_battle_info, setup_session_meta, setup_server_info
+from ..utils import short_tank_type, get_tank_role, get_comp7_vehicle_skill_tag, get_comp7_rank_tag, setup_battle_event, setup_session_meta
 from ..wotHookEvents import wotHookEvents
 from ...common.exceptionSending import with_exception_sending
 from ...utils import print_debug, print_error
@@ -33,6 +33,26 @@ if typing.TYPE_CHECKING:
 
 
 PM_STATE_NAMES = dict([(v, k) for k, v in PM_STATE.__dict__.iteritems() if isinstance(v, int)])
+
+
+def get_comp7_result_rank_tag(avatarResults):
+  if avatarResults.get('comp7QualActive', False): return 'qual'
+  rankInfo = avatarResults.get('comp7Rank') or ()
+
+  try:
+    # Lesta supplies two values; WG adds a serial index.
+    if len(rankInfo) not in (2, 3): return None
+
+    rank, divisionIdx = rankInfo[:2]
+    division = comp7_shared.getPlayerDivisionByRankAndIndex(rank, divisionIdx)
+    if division is None: return None
+
+    if divisionIdx > 0: divisionIdx = comp7_shared.getDivisionEnumValue(division)
+    
+    return get_comp7_rank_tag((comp7_shared.getRankEnumValue(division), divisionIdx), False)
+  except Exception:
+    return None
+
 
 def parseCurrencies(results):
   # type: (dict) -> dict
@@ -120,43 +140,6 @@ def parsePersonalMissions(results):
 
   return parsedPmQuests
 
-def get_comp7_rank_tag(rankInfo, isQualActive):
-  if isQualActive: return 'qual' 
-  if not rankInfo: return None
-
-  try: rank, divisionIdx = rankInfo
-  except: return None
-
-  if not rank: return None
-
-  rankTag = comp7_i18n_helpers.RANK_MAP.get(rank, None)
-  if rankTag is None: return None
-
-  # Match Lesta's battle UI: keep the division whenever the client supplies it.
-  if divisionIdx <= 0: return rankTag
-
-  divisionTag = comp7_i18n_helpers.DIVISION_MAP.get(divisionIdx, None)
-  if divisionTag is None: return None
-
-  return '{}_{}'.format(rankTag, divisionTag)
-
-def get_comp7_result_rank_tag(avatarResults):
-  rankInfo = avatarResults.get('comp7Rank') or ()
-  if len(rankInfo) != 3: return None
-
-  if avatarResults.get('comp7QualActive', False):
-    return get_comp7_rank_tag(None, True)
-
-  try:
-    rank, divisionIdx, _serialIdx = rankInfo
-    division = comp7_shared.getPlayerDivisionByRankAndIndex(rank, divisionIdx)
-    if division is None: return None
-    rankInfo = (comp7_shared.getRankEnumValue(division), comp7_shared.getDivisionEnumValue(division))
-  except Exception:
-    return None
-
-  return get_comp7_rank_tag(rankInfo, False)
-
 class OnBattleResultLogger:
   arenas_id_wait_battle_result = []
   battle_loaded = False
@@ -188,8 +171,7 @@ class OnBattleResultLogger:
     if arenaID in self.precreated_battle_result_event: return
 
     event = OnBattleResult()
-    setup_dynamic_battle_info(event)
-    setup_server_info(event)
+    setup_battle_event(event)
     self.precreated_battle_result_event[arenaID] = event
 
   def on_arena_period_change(self, obj, period, *a, **k):
@@ -287,6 +269,8 @@ class OnBattleResultLogger:
         if vehicles[vehicleId][0]['accountDBID'] == personalAvatar['accountDBID']:
           personalVehicleId = vehicleId
 
+      personalComp7Rank = get_comp7_result_rank_tag(personalAvatar)
+
       def getVehicleInfo(vehicle):
         veWG = vehiclesWG.getVehicleType(vehicle['typeCompDescr'])
         return {
@@ -332,7 +316,8 @@ class OnBattleResultLogger:
         vehAvatar = avatars[bdid]
         squadID = player['prebattleID']
 
-        rankTag = get_comp7_result_rank_tag(vehAvatar)
+        rankTag = personalComp7Rank if vehicleId == personalVehicleId else None
+        if rankTag is None: rankTag = get_comp7_result_rank_tag(vehAvatar)
         if rankTag: comp7_ranks[vehicleId] = rankTag
         
         res = {

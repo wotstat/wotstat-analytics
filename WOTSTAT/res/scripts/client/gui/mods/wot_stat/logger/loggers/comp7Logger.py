@@ -18,18 +18,35 @@ except ImportError:
 
 try:
   from gui.game_control.comp7_controller import _LeaderboardDataProvider
+  from gui.impl.lobby.comp7 import comp7_shared
 except ImportError:
   from comp7.gui.game_control.comp7_controller import _LeaderboardDataProvider
+  from comp7.gui.impl.lobby.comp7_helpers import comp7_shared
 
 from ..eventLogger import eventLogger
 from ..events import OnComp7Info
-from ..utils import setup_hangar_event
+from ..utils import get_comp7_rank_tag, setup_hangar_event
 from ...utils import print_warn
 from ...common.exceptionSending import with_exception_sending, send_current_exception
 
 LEADERBOARD_REQUEST_TIMEOUT = 10.0
-LEGEND_DIVISION_IDS = (11, 12, 13)
-CHAMPION_DIVISION_IDS = (21, 22, 23)
+
+
+def get_current_comp7_rank(controller):
+  # type: (IComp7Controller) -> str | None
+
+  if controller.qualificationState is None: return None
+  if controller.isQualificationActive(): return 'qual'
+
+  division = comp7_shared.getPlayerDivision()
+  if division is None: return None
+
+  rank = comp7_shared.getRankEnumValue(division)
+  divisionIdx = division.index
+  if divisionIdx > 0: divisionIdx = comp7_shared.getDivisionEnumValue(division)
+  
+  return get_comp7_rank_tag((rank, divisionIdx), False)
+
 
 onOwnDataGet = SafeEvent()
 getOwnData_old = _LeaderboardDataProvider.getOwnData
@@ -44,44 +61,35 @@ def getOwnData(self, callback):
 _LeaderboardDataProvider.getOwnData = getOwnData
 
 class Comp7Logger:
-  
+
   itemsCache = dependency.descriptor(IItemsCache) # type: IItemsCache
   comp7Controller = dependency.descriptor(IComp7Controller) # type: IComp7Controller
-  
+
   def __init__(self):
     global onOwnDataGet
-    self._lastEliteTrashload = None
-    self._lastRating = None
+    self._lastState = None
     self._leaderboardPosition = None
     self._leaderboardLoading = False
+    self._updatePending = False
+    self._updateCallbackId = None
 
     self.itemsCache.onSyncCompleted += self.onItemsCacheSyncCompleted
     self.comp7Controller.onRankUpdated += self.onComp7RankUpdated
+    self.comp7Controller.onQualificationStateUpdated += self.onComp7RankUpdated
     g_clientUpdateManager.addCallbacks({'cache.entitlements': self.onEntitlementsUpdated})
     ServicesLocator.appLoader.onGUISpaceEntered += self.onGUISpaceEntered
     onOwnDataGet += self.onOwnDataGet
 
   @with_exception_sending
   def getSeasonName(self):
-    try: 
+    try:
       from comp7_common import COMP7_MASKOT_ID, COMP7_CURRENT_SEASON
       return "comp7_{}_{}".format(COMP7_MASKOT_ID, COMP7_CURRENT_SEASON)
-    except:
+    except ImportError:
       from comp7_common_const import COMP7_MASKOT_ID
       season = self.comp7Controller.getActualSeasonNumber(includePreannounced=False)
       if season is None: return None
       return "comp7_{}_{}".format(COMP7_MASKOT_ID, season)
-    
-  @with_exception_sending
-  def getCurrentRating(self):
-    try:
-      from comp7_ranks_common import COMP7_RATING_ENTITLEMENT
-      return self.itemsCache.items.stats.entitlements.get(COMP7_RATING_ENTITLEMENT, None)
-    except:
-      from comp7_common_const import ratingEntNameBySeasonNumber
-      season = self.comp7Controller.getActualSeasonNumber(includePreannounced=False)
-      if season is None: return None
-      return self.itemsCache.items.stats.entitlements.get(ratingEntNameBySeasonNumber(str(season)), None)
 
   @with_exception_sending
   def onComp7RankUpdated(self, *a, **k):
@@ -104,116 +112,66 @@ class Comp7Logger:
   def onOwnDataGet(self, result=None):
     # type: (_LeaderboardDataProvider._OwnData) -> None
     if self._leaderboardLoading: return
-    if not result: return
+    if not result or not result.isSuccess: return
     if self._leaderboardPosition == result.position: return
-
-    BigWorld.callback(0, self.onChanged)
+    self.onChanged()
 
   @wg_async
-  def getEliteRating(self, leaderboard):
-    eliteRating, status = yield await_callback(leaderboard.getLastEliteRating(), LEADERBOARD_REQUEST_TIMEOUT)()
-    if status and eliteRating: raise AsyncReturn(eliteRating)
-
-    getDivisionsFirstPositions = getattr(leaderboard, 'getDivisionsFirstPositions', None)
-    if not getDivisionsFirstPositions: raise AsyncReturn(None)
-
-    positions, status = yield await_callback(getDivisionsFirstPositions(), LEADERBOARD_REQUEST_TIMEOUT)()
-    if not status or not positions: raise AsyncReturn(None)
-    if not any(positions.get(str(division)) for division in LEGEND_DIVISION_IDS): raise AsyncReturn(None)
-
-    championPositions = [positions.get(str(division)) for division in CHAMPION_DIVISION_IDS]
-    championPositions = [position for position in championPositions if position]
-    if championPositions:
-      lastLegendPosition = min(championPositions) - 1
-    else:
-      lastLegendPosition, status = yield await_callback(leaderboard.getRecordsCount(), LEADERBOARD_REQUEST_TIMEOUT)()
-      if not status: raise AsyncReturn(None)
-
-    if not lastLegendPosition or lastLegendPosition < 1: raise AsyncReturn(None)
-
-    records = yield await_callback(leaderboard.getTableRecords(1, lastLegendPosition - 1), LEADERBOARD_REQUEST_TIMEOUT)()
-    if not records or records[0].getRank() != lastLegendPosition: raise AsyncReturn(None)
-
+  def getLeaderboardPosition(self):
     try:
-      division = int(records[0].getP1())
-      eliteRating = int(records[0].getP2())
-    except (TypeError, ValueError):
-      raise AsyncReturn(None)
-
-    if division not in LEGEND_DIVISION_IDS or eliteRating <= 0: raise AsyncReturn(None)
-    raise AsyncReturn(eliteRating)
-  
-  @wg_async
-  def updateLeaderboard(self):
-    leaderboard = self.comp7Controller.leaderboard # type: _LeaderboardDataProvider
-
-    eliteTrashload = None
-    leaderboardPosition = None
-
-    self._leaderboardLoading = True
-    try:
-      try:
-        eliteTrashload = yield self.getEliteRating(leaderboard)
-
-      except TimeoutError:
-        print_warn("Timeout while getting leaderboard")
-        eliteTrashload = None
-
-      except BrokenPromiseError:
-        print_warn("Failed to get leaderboard: request was cancelled")
-        eliteTrashload = None
-
-      try:
-        ownData = yield await_callback(leaderboard.getOwnData(), LEADERBOARD_REQUEST_TIMEOUT)() # type: _LeaderboardDataProvider._OwnData
-        leaderboardPosition = ownData.position if ownData and ownData.isSuccess else None
-
-      except TimeoutError: print_warn("Timeout while getting ownData")
-      except BrokenPromiseError: print_warn("Failed to get ownData: request was cancelled")
-
-    finally:
-      self._leaderboardLoading = False
-      
-    if self._lastEliteTrashload == eliteTrashload and self._leaderboardPosition == leaderboardPosition:
-      raise AsyncReturn(False)
-
-    self._lastEliteTrashload = eliteTrashload
-    self._leaderboardPosition = leaderboardPosition
-
-    raise AsyncReturn(True)
+      ownData = yield await_callback(self.comp7Controller.leaderboard.getOwnData(), LEADERBOARD_REQUEST_TIMEOUT)()
+      raise AsyncReturn(ownData.position if ownData and ownData.isSuccess else None)
+    except TimeoutError:
+      print_warn("Timeout while getting ownData")
+    except BrokenPromiseError:
+      print_warn("Failed to get ownData: request was cancelled")
+    raise AsyncReturn(None)
 
   @with_exception_sending
-  def updateRating(self):
-    currentRating = self.getCurrentRating()
-    if self._lastRating == currentRating: return False
-    self._lastRating = currentRating
-    return True
+  def onChanged(self):
+    if self._leaderboardLoading:
+      self._updatePending = True
+      return
+    if self._updateCallbackId is None:
+      # Rank and qualification are updated sequentially during a cache sync.
+      self._updateCallbackId = BigWorld.callback(0, self.update)
 
   @wg_async
-  def onChanged(self):
-    if self._leaderboardLoading: return
+  def update(self):
+    self._updateCallbackId = None
     self._leaderboardLoading = True
+    self._updatePending = False
 
     try:
-      if not isPlayerAccount(): return
-
+      if not isPlayerAccount() or not self.itemsCache.isSynced(): return
+      accountDBID = BigWorld.player().databaseID
       season = self.getSeasonName()
       if season is None: return
 
-      leaderboardChanged = yield self.updateLeaderboard()
-      ratingChanged = self.updateRating()
+      position = yield self.getLeaderboardPosition()
+      if not isPlayerAccount() or not self.itemsCache.isSynced(): return
+      if accountDBID != BigWorld.player().databaseID or season != self.getSeasonName():
+        self._updatePending = True
+        return
 
-      if not leaderboardChanged and not ratingChanged: return
-      if not self._lastEliteTrashload and not self._lastRating and not self._leaderboardPosition: return
-      if self._lastRating is None: return
-  
-      event = OnComp7Info(season, self._lastRating, self._lastEliteTrashload, self._leaderboardPosition)
-      setup_hangar_event(event)
-      eventLogger.emit_event(event)
+      rating = self.comp7Controller.rating
+      rank = get_current_comp7_rank(self.comp7Controller)
+      if rating is None or rank is None: return
+
+      self._leaderboardPosition = position
+      state = (accountDBID, season, rating, rank, position)
+      if self._lastState != state:
+        event = OnComp7Info(*state[1:])
+        setup_hangar_event(event)
+        eventLogger.emit_event(event)
+        self._lastState = state
     except:
       send_current_exception()
       LOG_CURRENT_EXCEPTION()
     finally:
       self._leaderboardLoading = False
+      if self._updatePending:
+        self.onChanged()
 
 
 comp7Logger = Comp7Logger()

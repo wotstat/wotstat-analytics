@@ -5,7 +5,7 @@ from constants import ARENA_PERIOD, ARENA_BONUS_TYPE, ARENA_PERIOD_NAMES
 from ..eventLogger import eventLogger, battle_time
 from ..events import OnBattleStart
 from ..sessionStorage import sessionStorage
-from ..utils import vector, setup_dynamic_battle_info, setup_session_meta, setup_server_info
+from ..utils import vector, setup_battle_event
 from ..wotHookEvents import wotHookEvents
 from ...utils import print_debug
 
@@ -111,9 +111,7 @@ class OnBattleStartLogger:
                                   gameplayMask=gameplay_ctx.getMask()
                                   )
 
-    setup_dynamic_battle_info(onBattleStart)
-    setup_session_meta(onBattleStart)
-    setup_server_info(onBattleStart)
+    setup_battle_event(onBattleStart)
 
     eventLogger.emit_event(onBattleStart)
     sessionStorage.on_start_battle()
